@@ -24,6 +24,7 @@ from vocab_data import (
     MIDTERM_RANGE,
     FINAL_RANGE,
     get_all_characters_in_range,
+    get_all_compounds_in_range,
 )
 
 
@@ -75,89 +76,68 @@ class CheckAnswerRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _build_char_lookup(start_lesson: int, end_lesson: int) -> dict[str, list[str]]:
+    """Build a char -> similar_wrong lookup from the lesson range."""
+    lookup = {}
+    for lesson_num, lesson_data in VOCAB_DATA.items():
+        if start_lesson <= lesson_num <= end_lesson:
+            for c in lesson_data["characters"]:
+                lookup[c["char"]] = c["similar_wrong"]
+    return lookup
+
+
 def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article") -> dict:
-    """Generate content containing wrong characters from the selected lessons."""
-    chars_pool = get_all_characters_in_range(start_lesson, end_lesson)
-    if not chars_pool:
-        raise HTTPException(status_code=400, detail="No characters found for the selected range")
+    """
+    Generate content with wrong characters from the selected lessons.
+    Uses compound words (詞語) as the unit — each wrong character always
+    appears within a word in a real example sentence, so there is enough
+    context for students to identify the error.
+    """
+    compounds_pool = get_all_compounds_in_range(start_lesson, end_lesson)
+    char_lookup = _build_char_lookup(start_lesson, end_lesson)
+
+    # Filter to compounds that have usable example sentences
+    usable = []
+    for comp in compounds_pool:
+        word = comp["word"]
+        examples = [ex for ex in comp.get("examples", []) if len(ex) >= 5 and word in ex]
+        if not examples:
+            continue
+        # Find which characters in this word have similar_wrong mappings
+        swappable = [(i, ch) for i, ch in enumerate(word) if ch in char_lookup]
+        if not swappable:
+            continue
+        usable.append({**comp, "_examples": examples, "_swappable": swappable})
+
+    if not usable:
+        raise HTTPException(status_code=400, detail="No usable compound examples found for the selected range")
 
     if mode == "sentence":
-        # Pick 2-3 characters for sentence mode
-        num_wrong = min(random.randint(2, 3), len(chars_pool))
-        selected_chars = random.sample(chars_pool, num_wrong)
-        text_info, wrong_chars_info = _build_sentences(selected_chars)
+        num_wrong = min(random.randint(2, 3), len(usable))
     else:
-        # Pick 5-8 characters for article mode
-        num_wrong = min(random.randint(5, 8), len(chars_pool))
-        selected_chars = random.sample(chars_pool, num_wrong)
-        text_info, wrong_chars_info = _build_article(selected_chars)
+        num_wrong = min(random.randint(5, 8), len(usable))
 
-    return {
-        "original_text": text_info["original"],
-        "display_text": text_info["display"],
-        "wrong_chars": wrong_chars_info,
-        "total_wrong": len(wrong_chars_info),
-    }
+    selected = random.sample(usable, num_wrong)
 
-
-def _get_example_sentences(char_info: dict) -> list[str]:
-    """
-    Get example sentences for a character from vocab data.
-    Looks in both single char examples and compound word examples.
-    Returns sentences that contain the character.
-    """
-    correct_char = char_info["char"]
-    lesson_num = char_info["lesson"]
-    examples = list(char_info.get("examples", []))
-
-    # Also look at compound word examples from the lesson
-    lesson_data = VOCAB_DATA.get(lesson_num, {})
-    for comp in lesson_data.get("compounds", []):
-        if correct_char in comp["word"]:
-            for ex in comp.get("examples", []):
-                if correct_char in ex and ex not in examples:
-                    examples.append(ex)
-
-    # Filter: must contain the character and be a proper sentence (>= 5 chars)
-    valid = [ex for ex in examples if correct_char in ex and len(ex) >= 5
-             and '(__)' not in ex and '(____)' not in ex and '(______)' not in ex]
-    return valid
-
-
-# Fallback sentence templates when no real example is available
-_FALLBACK_TEMPLATES = [
-    "老師教我們「{char}」這個字的正確寫法。",
-    "我每天都會練習「{char}」這個字。",
-    "媽媽說「{char}」是這課很重要的生字。",
-    "考試前我把「{char}」這個字再複習了一遍。",
-]
-
-
-def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
-    """
-    Build 1-2 short sentences using real example sentences from the curriculum,
-    then replace the correct character with a similar wrong character.
-    """
     wrong_chars_info = []
     original_lines = []
     display_lines = []
 
-    for char_info in selected_chars:
-        correct_char = char_info["char"]
-        wrong_char = random.choice(char_info["similar_wrong"])
-        lesson_num = char_info["lesson"]
-        lesson_title = char_info["lesson_title"]
+    for comp_info in selected:
+        word = comp_info["word"]
+        lesson_num = comp_info["lesson"]
+        lesson_title = comp_info["lesson_title"]
 
-        # Try to use a real example sentence
-        real_examples = _get_example_sentences(char_info)
-        if real_examples:
-            original_sentence = random.choice(real_examples)
-        else:
-            template = random.choice(_FALLBACK_TEMPLATES)
-            original_sentence = template.format(char=correct_char)
+        # Pick a random example sentence
+        original_sentence = random.choice(comp_info["_examples"])
 
-        # Replace the FIRST occurrence of the correct char with the wrong char
-        display_sentence = original_sentence.replace(correct_char, wrong_char, 1)
+        # Pick a random swappable character from the word
+        _idx, correct_char = random.choice(comp_info["_swappable"])
+        wrong_char = random.choice(char_lookup[correct_char])
+
+        # Build the wrong version of the word, then replace in sentence
+        wrong_word = word[:_idx] + wrong_char + word[_idx + 1:]
+        display_sentence = original_sentence.replace(word, wrong_word, 1)
 
         original_lines.append(original_sentence)
         display_lines.append(display_sentence)
@@ -167,6 +147,7 @@ def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
             "correct_char": correct_char,
             "lesson": lesson_num,
             "lesson_title": lesson_title,
+            "word": word,
         })
 
     original_text = "\n".join(original_lines)
@@ -183,58 +164,12 @@ def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
         else:
             info["position"] = -1
 
-    return {"original": original_text, "display": display_text}, wrong_chars_info
-
-
-def _build_article(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
-    """
-    Build a short article using real example sentences from the curriculum.
-    Each sentence contains one wrong character.
-    """
-    wrong_chars_info = []
-    original_lines = []
-    display_lines = []
-
-    for char_info in selected_chars:
-        correct_char = char_info["char"]
-        wrong_char = random.choice(char_info["similar_wrong"])
-        lesson_num = char_info["lesson"]
-        lesson_title = char_info["lesson_title"]
-
-        real_examples = _get_example_sentences(char_info)
-        if real_examples:
-            original_sentence = random.choice(real_examples)
-        else:
-            template = random.choice(_FALLBACK_TEMPLATES)
-            original_sentence = template.format(char=correct_char)
-
-        display_sentence = original_sentence.replace(correct_char, wrong_char, 1)
-
-        original_lines.append(original_sentence)
-        display_lines.append(display_sentence)
-
-        wrong_chars_info.append({
-            "wrong_char": wrong_char,
-            "correct_char": correct_char,
-            "lesson": lesson_num,
-            "lesson_title": lesson_title,
-        })
-
-    original_text = "\n".join(original_lines)
-    display_text = "\n".join(display_lines)
-
-    # Calculate positions
-    for i, info in enumerate(wrong_chars_info):
-        wrong_char = info["wrong_char"]
-        display_sentence = display_lines[i]
-        pos_in_sentence = display_sentence.find(wrong_char)
-        if pos_in_sentence >= 0:
-            global_pos = sum(len(display_lines[j]) + 1 for j in range(i)) + pos_in_sentence
-            info["position"] = global_pos
-        else:
-            info["position"] = -1
-
-    return {"original": original_text, "display": display_text}, wrong_chars_info
+    return {
+        "original_text": original_text,
+        "display_text": display_text,
+        "wrong_chars": wrong_chars_info,
+        "total_wrong": len(wrong_chars_info),
+    }
 
 
 # ---------------------------------------------------------------------------
