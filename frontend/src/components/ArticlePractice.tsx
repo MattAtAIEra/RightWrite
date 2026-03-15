@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import type { ArticleResponse, WrongChar } from "../types";
+import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
 
 interface Props {
   startLesson: number;
   endLesson: number;
+  practiceMode: PracticeMode;
   onFinish: (results: AnswerResult[]) => void;
   onBack: () => void;
 }
@@ -29,6 +30,7 @@ interface CharAnnotation {
 export default function ArticlePractice({
   startLesson,
   endLesson,
+  practiceMode,
   onFinish,
   onBack,
 }: Props) {
@@ -44,14 +46,14 @@ export default function ArticlePractice({
 
   useEffect(() => {
     setLoading(true);
-    generateArticle(startLesson, endLesson)
+    generateArticle(startLesson, endLesson, practiceMode)
       .then(setArticle)
       .catch(() => alert("生成文章失敗，請重試"))
       .finally(() => setLoading(false));
-  }, [startLesson, endLesson]);
+  }, [startLesson, endLesson, practiceMode]);
 
   if (loading) {
-    return <div className="loader">正在生成練習文章...</div>;
+    return <div className="loader">{practiceMode === "sentence" ? "正在生成練習句子..." : "正在生成練習文章..."}</div>;
   }
 
   if (!article) {
@@ -217,7 +219,9 @@ export default function ArticlePractice({
       </div>
 
       <div className="instruction-bar">
-        💡 請點擊文章中你認為是錯字的字，然後手寫正確的字！
+        {practiceMode === "sentence"
+          ? "💡 請點擊句子中你認為是錯字的字，然後手寫正確的字！"
+          : "💡 請點擊文章中你認為是錯字的字，然後手寫正確的字！"}
       </div>
 
       <div className="article-display">{renderArticle()}</div>

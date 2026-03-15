@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import type { LessonsResponse } from "../types";
+import type { LessonsResponse, PracticeMode } from "../types";
 import { fetchLessons } from "../api";
 
 interface Props {
-  onStart: (start: number, end: number) => void;
+  onStart: (start: number, end: number, mode: PracticeMode) => void;
 }
 
 export default function LessonSelector({ onStart }: Props) {
@@ -11,6 +11,7 @@ export default function LessonSelector({ onStart }: Props) {
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
   const [endLesson, setEndLesson] = useState(7);
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +43,29 @@ export default function LessonSelector({ onStart }: Props) {
         </p>
       </div>
 
+      {/* Practice mode selector */}
+      <div className="practice-mode-selector">
+        <h3>練習模式</h3>
+        <div className="practice-mode-options">
+          <button
+            className={`practice-mode-btn ${practiceMode === "sentence" ? "active" : ""}`}
+            onClick={() => setPracticeMode("sentence")}
+          >
+            <span className="mode-icon">📝</span>
+            <span className="mode-label">句子改錯</span>
+            <span className="mode-desc">1~2句短句，找出2~3個錯字</span>
+          </button>
+          <button
+            className={`practice-mode-btn ${practiceMode === "article" ? "active" : ""}`}
+            onClick={() => setPracticeMode("article")}
+          >
+            <span className="mode-icon">📄</span>
+            <span className="mode-label">短文改錯</span>
+            <span className="mode-desc">一篇小短文，找出5~8個錯字</span>
+          </button>
+        </div>
+      </div>
+
       <div className="mode-toggle">
         <button
           className={mode === "quick" ? "active" : ""}
@@ -63,7 +87,7 @@ export default function LessonSelector({ onStart }: Props) {
             <button
               key={opt.label}
               className="quick-btn"
-              onClick={() => onStart(opt.start, opt.end)}
+              onClick={() => onStart(opt.start, opt.end, practiceMode)}
             >
               <span className="quick-label">{opt.label}</span>
               <span className="quick-chars">
@@ -138,7 +162,7 @@ export default function LessonSelector({ onStart }: Props) {
 
           <button
             className="start-btn"
-            onClick={() => onStart(startLesson, endLesson)}
+            onClick={() => onStart(startLesson, endLesson, practiceMode)}
           >
             開始練習！
           </button>

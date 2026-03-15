@@ -37,3 +37,4 @@ export interface RecognizeResponse {
 }
 
 export type AppStage = "select" | "practice" | "result";
+export type PracticeMode = "sentence" | "article";

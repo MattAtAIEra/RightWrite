@@ -10,12 +10,13 @@ export async function fetchLessons(): Promise<LessonsResponse> {
 
 export async function generateArticle(
   startLesson: number,
-  endLesson: number
+  endLesson: number,
+  mode: string = "article"
 ): Promise<ArticleResponse> {
   const res = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ start_lesson: startLesson, end_lesson: endLesson }),
+    body: JSON.stringify({ start_lesson: startLesson, end_lesson: endLesson, mode }),
   });
   if (!res.ok) throw new Error("Failed to generate article");
   return res.json();

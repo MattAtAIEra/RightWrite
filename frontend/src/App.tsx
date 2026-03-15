@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AppStage } from "./types";
+import type { AppStage, PracticeMode } from "./types";
 import type { AnswerResult } from "./components/ArticlePractice";
 import LessonSelector from "./components/LessonSelector";
 import ArticlePractice from "./components/ArticlePractice";
@@ -8,11 +8,13 @@ import ResultView from "./components/ResultView";
 function App() {
   const [stage, setStage] = useState<AppStage>("select");
   const [lessonRange, setLessonRange] = useState<[number, number]>([1, 7]);
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("article");
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [practiceKey, setPracticeKey] = useState(0);
 
-  const handleStart = (start: number, end: number) => {
+  const handleStart = (start: number, end: number, mode: PracticeMode) => {
     setLessonRange([start, end]);
+    setPracticeMode(mode);
     setPracticeKey((k) => k + 1);
     setStage("practice");
   };
@@ -40,6 +42,7 @@ function App() {
           key={practiceKey}
           startLesson={lessonRange[0]}
           endLesson={lessonRange[1]}
+          practiceMode={practiceMode}
           onFinish={handleFinish}
           onBack={handleBack}
         />

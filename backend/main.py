@@ -44,6 +44,7 @@ app.add_middleware(
 class GenerateArticleRequest(BaseModel):
     start_lesson: int
     end_lesson: int
+    mode: str = "article"  # "sentence" or "article"
 
 
 class GenerateArticleResponse(BaseModel):
@@ -109,28 +110,131 @@ ARTICLE_TEMPLATES = [
 ]
 
 
-def generate_article_with_errors(start_lesson: int, end_lesson: int) -> dict:
-    """Generate a short article containing wrong characters from the selected lessons."""
+def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article") -> dict:
+    """Generate content containing wrong characters from the selected lessons."""
     chars_pool = get_all_characters_in_range(start_lesson, end_lesson)
     if not chars_pool:
         raise HTTPException(status_code=400, detail="No characters found for the selected range")
 
-    # Pick 5-8 characters to make wrong
-    num_wrong = min(random.randint(5, 8), len(chars_pool))
-    selected_chars = random.sample(chars_pool, num_wrong)
-
-    # Build a contextual article using the selected characters
-    article_text, wrong_chars_info = _build_article(selected_chars)
+    if mode == "sentence":
+        # Pick 2-3 characters for sentence mode
+        num_wrong = min(random.randint(2, 3), len(chars_pool))
+        selected_chars = random.sample(chars_pool, num_wrong)
+        text_info, wrong_chars_info = _build_sentences(selected_chars)
+    else:
+        # Pick 5-8 characters for article mode
+        num_wrong = min(random.randint(5, 8), len(chars_pool))
+        selected_chars = random.sample(chars_pool, num_wrong)
+        text_info, wrong_chars_info = _build_article(selected_chars)
 
     return {
-        "original_text": article_text["original"],
-        "display_text": article_text["display"],
+        "original_text": text_info["original"],
+        "display_text": text_info["display"],
         "wrong_chars": wrong_chars_info,
         "total_wrong": len(wrong_chars_info),
     }
 
 
-def _build_article(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
+def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
+    """
+    Build 1-2 short sentences that naturally embed the selected characters,
+    then replace them with similar wrong characters.
+    """
+    wrong_chars_info = []
+
+    # Sentence templates that embed a character naturally (no 「」 quotes)
+    sentence_pools = [
+        [
+            "{char}天的時候，到處都是花開的景象，讓人心情愉快。",
+            "大家一起{char}力學習，希望在考試中取得好成績。",
+            "我們在教室裡安{char}地聽老師上課。",
+            "弟弟最喜歡{char}皮搗蛋，讓爸媽哭笑不得。",
+            "姐姐每天都會{char}真地完成作業。",
+            "老師教我們寫{char}字，大家都寫得很認真。",
+            "媽媽帶我去{char}場買了很多好吃的水果。",
+            "放學後我和同學在操{char}上跑步比賽。",
+            "這本故事書的內容很{char}動，讓我看了又看。",
+            "天氣變{char}了，大家都穿上了厚外套。",
+            "公園裡的{char}花開得非常漂亮。",
+            "爸爸每天{char}車送我上學。",
+            "我們學校有一個很大的圖{char}館。",
+            "下雨天路上很{char}，走路要小心。",
+            "這個週末我們全家一起去{char}行。",
+        ],
+        [
+            "我和朋友一起到{char}邊玩耍，水裡有好多小魚。",
+            "冬天的山{char}上覆蓋著白雪，非常美麗。",
+            "我在作文裡寫了一篇關於{char}天的故事。",
+            "看完這本書後，我{char}得收穫很多。",
+            "老師說我們要{char}惜時間，好好學習。",
+            "教室的窗{char}被同學擦得很乾淨。",
+            "這次旅行讓我{char}受到大自然的奧妙。",
+            "外婆家的院子裡種了一棵很大的{char}樹。",
+            "清晨的陽{char}灑在草地上，閃閃發光。",
+            "我們要{char}護地球，不能亂丟垃圾。",
+            "他在比{char}中得到了第一名，大家都為他鼓掌。",
+            "做人要{char}實，不可以說謊。",
+            "同學們{char}心協力完成了這個作品。",
+            "這幅畫的{char}色搭配得很好看。",
+            "我最喜歡{char}學課，可以做很多有趣的實驗。",
+        ],
+    ]
+
+    # Pick one or two sentence pools for variety
+    original_lines = []
+    display_lines = []
+
+    for i, char_info in enumerate(selected_chars):
+        correct_char = char_info["char"]
+        wrong_char = random.choice(char_info["similar_wrong"])
+        lesson_num = char_info["lesson"]
+        lesson_title = char_info["lesson_title"]
+
+        pool = sentence_pools[i % len(sentence_pools)]
+        template = random.choice(pool)
+
+        original_sentence = template.format(char=correct_char)
+        display_sentence = template.format(char=wrong_char)
+
+        original_lines.append(original_sentence)
+        display_lines.append(display_sentence)
+
+        wrong_chars_info.append({
+            "wrong_char": wrong_char,
+            "correct_char": correct_char,
+            "lesson": lesson_num,
+            "lesson_title": lesson_title,
+        })
+
+    original_text = "\n".join(original_lines)
+    display_text = "\n".join(display_lines)
+
+    # Calculate positions of wrong characters in display_text
+    for i, info in enumerate(wrong_chars_info):
+        wrong_char = info["wrong_char"]
+        # Find the n-th occurrence for this specific wrong char
+        search_from = 0
+        # Find in the corresponding line
+        line_start = 0
+        for j in range(i):
+            line_start = display_text.index("\n", line_start) + 1 if i > 0 else 0
+
+        # For position calculation, find the wrong char in the display sentence
+        display_sentence = display_lines[i]
+        # The wrong char replaces the correct char in the template
+        # Find its position within the sentence
+        pos_in_sentence = display_sentence.find(wrong_char)
+        if pos_in_sentence >= 0:
+            # Calculate global position
+            global_pos = sum(len(display_lines[j]) + 1 for j in range(i)) + pos_in_sentence
+            info["position"] = global_pos
+        else:
+            info["position"] = -1
+
+    return {"original": original_text, "display": display_text}, wrong_chars_info
+
+
+
     """
     Build a short Chinese article that naturally uses the selected characters,
     then replace some with similar wrong characters.
@@ -268,7 +372,7 @@ def generate_article(req: GenerateArticleRequest):
     if req.start_lesson > req.end_lesson:
         raise HTTPException(status_code=400, detail="Start lesson must be <= end lesson")
 
-    result = generate_article_with_errors(req.start_lesson, req.end_lesson)
+    result = generate_article_with_errors(req.start_lesson, req.end_lesson, req.mode)
     return result
 
 
