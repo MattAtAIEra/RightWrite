@@ -24,8 +24,8 @@ from vocab_data import (
     MIDTERM_RANGE,
     FINAL_RANGE,
     get_all_characters_in_range,
-    get_lessons_in_range,
 )
+
 
 app = FastAPI(title="RightWrite API", version="1.0.0")
 
@@ -74,41 +74,6 @@ class CheckAnswerRequest(BaseModel):
 # Article generation with intentional wrong characters
 # ---------------------------------------------------------------------------
 
-# Pre-built article templates that can incorporate vocabulary characters
-ARTICLE_TEMPLATES = [
-    {
-        "theme": "nature",
-        "template": (
-            "春天來了，{c1}地上長出了嫩綠的小草。小河邊的{c2}樹開滿了花，"
-            "{c3}蝶在花叢中飛舞。遠處的山{c4}被白雲圍繞，看起來就像一幅美麗的畫。"
-            "我和朋友們一起到{c5}外踏青，{c6}受大自然的美好。"
-            "溪水{c7}流過石頭，發出清脆的聲音。"
-            "我們在草地上奔{c8}、嬉{c9}，度過了愉快的一天。"
-        ),
-    },
-    {
-        "theme": "school",
-        "template": (
-            "今天在學校裡，老師帶我們到{c1}書館看書。"
-            "我{c2}了一本關於{c3}學的故事書，裡面的內容非常{c4}動人心。"
-            "下課後，我和同學到操{c5}打球，大家都很{c6}力地練習。"
-            "放學時，{c7}色已經變暗了，我們{c8}著快樂的心情回家。"
-            "媽媽問我今天學了什麼，我開心地{c9}訴她每一件有趣的事。"
-        ),
-    },
-    {
-        "theme": "family",
-        "template": (
-            "週末的早晨，爸爸帶著全家人一起去{c1}場買菜。"
-            "媽媽精心{c2}備了豐富的食材，要做一頓美味的大餐。"
-            "弟弟在旁邊幫忙洗{c3}，姊姊負責切水果。"
-            "全家人一起{c4}力完成了午餐，桌上擺滿了{c5}味的菜餚。"
-            "吃完飯後，我們到附近的公{c6}散步，{c7}受溫暖的陽光。"
-            "這是一個{c8}福又快{c9}的週末。"
-        ),
-    },
-]
-
 
 def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article") -> dict:
     """Generate content containing wrong characters from the selected lessons."""
@@ -135,66 +100,64 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
     }
 
 
+def _get_example_sentences(char_info: dict) -> list[str]:
+    """
+    Get example sentences for a character from vocab data.
+    Looks in both single char examples and compound word examples.
+    Returns sentences that contain the character.
+    """
+    correct_char = char_info["char"]
+    lesson_num = char_info["lesson"]
+    examples = list(char_info.get("examples", []))
+
+    # Also look at compound word examples from the lesson
+    lesson_data = VOCAB_DATA.get(lesson_num, {})
+    for comp in lesson_data.get("compounds", []):
+        if correct_char in comp["word"]:
+            for ex in comp.get("examples", []):
+                if correct_char in ex and ex not in examples:
+                    examples.append(ex)
+
+    # Filter: must contain the character and be a proper sentence (>= 5 chars)
+    valid = [ex for ex in examples if correct_char in ex and len(ex) >= 5
+             and '(__)' not in ex and '(____)' not in ex and '(______)' not in ex]
+    return valid
+
+
+# Fallback sentence templates when no real example is available
+_FALLBACK_TEMPLATES = [
+    "老師教我們「{char}」這個字的正確寫法。",
+    "我每天都會練習「{char}」這個字。",
+    "媽媽說「{char}」是這課很重要的生字。",
+    "考試前我把「{char}」這個字再複習了一遍。",
+]
+
+
 def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
     """
-    Build 1-2 short sentences that naturally embed the selected characters,
-    then replace them with similar wrong characters.
+    Build 1-2 short sentences using real example sentences from the curriculum,
+    then replace the correct character with a similar wrong character.
     """
     wrong_chars_info = []
-
-    # Sentence templates that embed a character naturally (no 「」 quotes)
-    sentence_pools = [
-        [
-            "{char}天的時候，到處都是花開的景象，讓人心情愉快。",
-            "大家一起{char}力學習，希望在考試中取得好成績。",
-            "我們在教室裡安{char}地聽老師上課。",
-            "弟弟最喜歡{char}皮搗蛋，讓爸媽哭笑不得。",
-            "姐姐每天都會{char}真地完成作業。",
-            "老師教我們寫{char}字，大家都寫得很認真。",
-            "媽媽帶我去{char}場買了很多好吃的水果。",
-            "放學後我和同學在操{char}上跑步比賽。",
-            "這本故事書的內容很{char}動，讓我看了又看。",
-            "天氣變{char}了，大家都穿上了厚外套。",
-            "公園裡的{char}花開得非常漂亮。",
-            "爸爸每天{char}車送我上學。",
-            "我們學校有一個很大的圖{char}館。",
-            "下雨天路上很{char}，走路要小心。",
-            "這個週末我們全家一起去{char}行。",
-        ],
-        [
-            "我和朋友一起到{char}邊玩耍，水裡有好多小魚。",
-            "冬天的山{char}上覆蓋著白雪，非常美麗。",
-            "我在作文裡寫了一篇關於{char}天的故事。",
-            "看完這本書後，我{char}得收穫很多。",
-            "老師說我們要{char}惜時間，好好學習。",
-            "教室的窗{char}被同學擦得很乾淨。",
-            "這次旅行讓我{char}受到大自然的奧妙。",
-            "外婆家的院子裡種了一棵很大的{char}樹。",
-            "清晨的陽{char}灑在草地上，閃閃發光。",
-            "我們要{char}護地球，不能亂丟垃圾。",
-            "他在比{char}中得到了第一名，大家都為他鼓掌。",
-            "做人要{char}實，不可以說謊。",
-            "同學們{char}心協力完成了這個作品。",
-            "這幅畫的{char}色搭配得很好看。",
-            "我最喜歡{char}學課，可以做很多有趣的實驗。",
-        ],
-    ]
-
-    # Pick one or two sentence pools for variety
     original_lines = []
     display_lines = []
 
-    for i, char_info in enumerate(selected_chars):
+    for char_info in selected_chars:
         correct_char = char_info["char"]
         wrong_char = random.choice(char_info["similar_wrong"])
         lesson_num = char_info["lesson"]
         lesson_title = char_info["lesson_title"]
 
-        pool = sentence_pools[i % len(sentence_pools)]
-        template = random.choice(pool)
+        # Try to use a real example sentence
+        real_examples = _get_example_sentences(char_info)
+        if real_examples:
+            original_sentence = random.choice(real_examples)
+        else:
+            template = random.choice(_FALLBACK_TEMPLATES)
+            original_sentence = template.format(char=correct_char)
 
-        original_sentence = template.format(char=correct_char)
-        display_sentence = template.format(char=wrong_char)
+        # Replace the FIRST occurrence of the correct char with the wrong char
+        display_sentence = original_sentence.replace(correct_char, wrong_char, 1)
 
         original_lines.append(original_sentence)
         display_lines.append(display_sentence)
@@ -212,20 +175,9 @@ def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
     # Calculate positions of wrong characters in display_text
     for i, info in enumerate(wrong_chars_info):
         wrong_char = info["wrong_char"]
-        # Find the n-th occurrence for this specific wrong char
-        search_from = 0
-        # Find in the corresponding line
-        line_start = 0
-        for j in range(i):
-            line_start = display_text.index("\n", line_start) + 1 if i > 0 else 0
-
-        # For position calculation, find the wrong char in the display sentence
         display_sentence = display_lines[i]
-        # The wrong char replaces the correct char in the template
-        # Find its position within the sentence
         pos_in_sentence = display_sentence.find(wrong_char)
         if pos_in_sentence >= 0:
-            # Calculate global position
             global_pos = sum(len(display_lines[j]) + 1 for j in range(i)) + pos_in_sentence
             info["position"] = global_pos
         else:
@@ -234,75 +186,33 @@ def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
     return {"original": original_text, "display": display_text}, wrong_chars_info
 
 
-
+def _build_article(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
     """
-    Build a short Chinese article that naturally uses the selected characters,
-    then replace some with similar wrong characters.
+    Build a short article using real example sentences from the curriculum.
+    Each sentence contains one wrong character.
     """
-    # Create a short article that includes the target characters
-    char_list = [c["char"] for c in selected_chars]
-
-    # Generate contextual sentences for each character
-    sentences = []
     wrong_chars_info = []
-
-    sentence_patterns = [
-        "在美麗的{context}中，我們看到了許多有趣的事物。",
-        "老師告訴我們，{char}這個字要特別注意書寫。",
-        "小明每天都會練習寫{char}字，希望能寫得更好。",
-        "這個故事讓我學到了很多關於{topic}的知識。",
-        "春天的時候，大地充滿了生{qi}，到處都是花開的景象。",
-        "媽媽常常提醒我，做事要有{xin}心，不能半途而廢。",
-        "我們班上的同學都很{nu}力學習，每個人都想進步。",
-        "下課後，大家一起到操場上{yun}動，鍛鍊身體。",
-    ]
-
-    # Build a coherent article
     original_lines = []
     display_lines = []
 
-    # Create topic sentences
-    topics = [
-        ("學習", "這學期我們學了很多新的生字。"),
-        ("自然", "大自然中有許多美麗的風景。"),
-        ("生活", "我們的生活中有很多值得感恩的事。"),
-        ("學校", "學校是我們學習和成長的地方。"),
-    ]
-
-    topic = random.choice(topics)
-    intro = topic[1]
-    original_lines.append(intro)
-    display_lines.append(intro)
-
-    # For each selected character, create a sentence and introduce error
-    position_offset = len(intro)
-    for i, char_info in enumerate(selected_chars):
+    for char_info in selected_chars:
         correct_char = char_info["char"]
-        wrong_options = char_info["similar_wrong"]
-        wrong_char = random.choice(wrong_options)
+        wrong_char = random.choice(char_info["similar_wrong"])
         lesson_num = char_info["lesson"]
         lesson_title = char_info["lesson_title"]
 
-        # Create a sentence using this character
-        sentence_templates = [
-            f"老師教我們「{correct_char}」這個字，它出現在第{lesson_num}課。",
-            f"「{correct_char}」是這學期要學的重要生字之一。",
-            f"我認真地練習書寫「{correct_char}」，希望記得更牢。",
-            f"課本裡面有「{correct_char}」這個字，我們要把它學好。",
-            f"今天的功課是練習寫「{correct_char}」，要寫十遍。",
-            f"考試的時候，「{correct_char}」這個字差點寫錯了。",
-            f"爸爸教我用「{correct_char}」來造句，我想了很久。",
-            f"這篇文章裡有「{correct_char}」字，讀起來很有趣。",
-        ]
+        real_examples = _get_example_sentences(char_info)
+        if real_examples:
+            original_sentence = random.choice(real_examples)
+        else:
+            template = random.choice(_FALLBACK_TEMPLATES)
+            original_sentence = template.format(char=correct_char)
 
-        original_sentence = random.choice(sentence_templates)
-        display_sentence = original_sentence.replace(f"「{correct_char}」", f"「{wrong_char}」", 1)
+        display_sentence = original_sentence.replace(correct_char, wrong_char, 1)
 
         original_lines.append(original_sentence)
         display_lines.append(display_sentence)
 
-        # Find the position of the wrong character in the display text
-        # We'll calculate positions after joining
         wrong_chars_info.append({
             "wrong_char": wrong_char,
             "correct_char": correct_char,
@@ -310,28 +220,17 @@ def _build_sentences(selected_chars: list[dict]) -> tuple[dict, list[dict]]:
             "lesson_title": lesson_title,
         })
 
-    # Add a closing sentence
-    closings = [
-        "只要每天認真練習，我一定可以把每個字都寫對！",
-        "學習生字雖然辛苦，但是很有成就感。",
-        "我會繼續努力，把這些生字都記住。",
-        "期末考快到了，我要加油把生字都複習好。",
-    ]
-    closing = random.choice(closings)
-    original_lines.append(closing)
-    display_lines.append(closing)
-
     original_text = "\n".join(original_lines)
     display_text = "\n".join(display_lines)
 
-    # Calculate positions of wrong characters in display_text
-    for info in wrong_chars_info:
+    # Calculate positions
+    for i, info in enumerate(wrong_chars_info):
         wrong_char = info["wrong_char"]
-        # Find position in display text within 「」
-        pattern = f"「{wrong_char}」"
-        match = display_text.find(pattern)
-        if match >= 0:
-            info["position"] = match + 1  # +1 to skip the 「
+        display_sentence = display_lines[i]
+        pos_in_sentence = display_sentence.find(wrong_char)
+        if pos_in_sentence >= 0:
+            global_pos = sum(len(display_lines[j]) + 1 for j in range(i)) + pos_in_sentence
+            info["position"] = global_pos
         else:
             info["position"] = -1
 
