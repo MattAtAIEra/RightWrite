@@ -83,6 +83,46 @@ body {
 }
 
 /* Practice Mode Selector */
+.grade-selector {
+  margin-bottom: 24px;
+}
+
+.grade-selector h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.grade-options {
+  display: flex;
+  gap: 12px;
+}
+
+.grade-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.grade-btn:hover {
+  border-color: var(--primary);
+  background: #f0f6ff;
+}
+
+.grade-btn.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
+}
+
 .practice-mode-selector {
   margin-bottom: 24px;
 }

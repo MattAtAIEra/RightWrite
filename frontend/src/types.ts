@@ -1,3 +1,14 @@
+export interface GradeOption {
+  id: string;
+  label: string;
+  grade: string;
+  publisher: string;
+}
+
+export interface GradesResponse {
+  grades: GradeOption[];
+}
+
 export interface Lesson {
   lesson_number: number;
   title: string;

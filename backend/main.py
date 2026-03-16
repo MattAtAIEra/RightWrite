@@ -9,20 +9,16 @@ import random
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from vocab_data import (
-    VOCAB_DATA,
-    TOTAL_LESSONS,
-    SEMESTER_NAME,
-    GRADE,
-    PUBLISHER,
-    MIDTERM_RANGE,
-    FINAL_RANGE,
+    GRADE_REGISTRY,
+    get_grade_info,
+    get_vocab_data,
     get_all_characters_in_range,
     get_all_compounds_in_range,
 )
@@ -46,6 +42,7 @@ class GenerateArticleRequest(BaseModel):
     start_lesson: int
     end_lesson: int
     mode: str = "article"  # "sentence" or "article"
+    grade_id: str = "grade4"
 
 
 class GenerateArticleResponse(BaseModel):
@@ -76,25 +73,27 @@ class CheckAnswerRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _build_char_lookup(start_lesson: int, end_lesson: int) -> dict[str, list[str]]:
+def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grade4") -> dict[str, list[str]]:
     """Build a char -> similar_wrong lookup from the lesson range."""
+    data = get_vocab_data(grade_id)
     lookup = {}
-    for lesson_num, lesson_data in VOCAB_DATA.items():
+    for lesson_num, lesson_data in data.items():
         if start_lesson <= lesson_num <= end_lesson:
             for c in lesson_data["characters"]:
-                lookup[c["char"]] = c["similar_wrong"]
+                if c["similar_wrong"]:
+                    lookup[c["char"]] = c["similar_wrong"]
     return lookup
 
 
-def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article") -> dict:
+def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article", grade_id: str = "grade4") -> dict:
     """
     Generate content with wrong characters from the selected lessons.
     Uses compound words (詞語) as the unit — each wrong character always
     appears within a word in a real example sentence, so there is enough
     context for students to identify the error.
     """
-    compounds_pool = get_all_compounds_in_range(start_lesson, end_lesson)
-    char_lookup = _build_char_lookup(start_lesson, end_lesson)
+    compounds_pool = get_all_compounds_in_range(start_lesson, end_lesson, grade_id)
+    char_lookup = _build_char_lookup(start_lesson, end_lesson, grade_id)
 
     # Filter to compounds that have usable example sentences
     usable = []
@@ -113,7 +112,7 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
         raise HTTPException(status_code=400, detail="No usable compound examples found for the selected range")
 
     if mode == "sentence":
-        num_wrong = min(random.randint(2, 3), len(usable))
+        num_wrong = min(random.randint(5, 7), len(usable))
     else:
         num_wrong = min(random.randint(5, 8), len(usable))
 
@@ -176,24 +175,41 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
 # API endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/api/grades")
+def get_grades():
+    """Get all available grades."""
+    grades = []
+    for grade_id, info in GRADE_REGISTRY.items():
+        grades.append({
+            "id": grade_id,
+            "label": info["label"],
+            "grade": info["grade"],
+            "publisher": info["publisher"],
+        })
+    return {"grades": grades}
+
+
 @app.get("/api/lessons")
-def get_lessons():
-    """Get all available lessons."""
+def get_lessons(grade_id: str = Query("grade4")):
+    """Get all available lessons for a grade."""
+    info = get_grade_info(grade_id)
+    data = get_vocab_data(grade_id)
+
     lessons = []
-    for num, data in VOCAB_DATA.items():
+    for num, ldata in data.items():
         lessons.append({
             "lesson_number": num,
-            "title": data["title"],
-            "character_count": len(data["characters"]),
-            "characters": [c["char"] for c in data["characters"]],
+            "title": ldata["title"],
+            "character_count": len(ldata["characters"]),
+            "characters": [c["char"] for c in ldata["characters"]],
         })
     return {
-        "semester": SEMESTER_NAME,
-        "grade": GRADE,
-        "publisher": PUBLISHER,
-        "total_lessons": TOTAL_LESSONS,
-        "midterm_range": list(MIDTERM_RANGE),
-        "final_range": list(FINAL_RANGE),
+        "semester": info["semester"],
+        "grade": info["grade"],
+        "publisher": info["publisher"],
+        "total_lessons": info["total_lessons"],
+        "midterm_range": list(info["midterm_range"]),
+        "final_range": list(info["final_range"]),
         "lessons": lessons,
     }
 
@@ -201,12 +217,13 @@ def get_lessons():
 @app.post("/api/generate", response_model=GenerateArticleResponse)
 def generate_article(req: GenerateArticleRequest):
     """Generate an article with intentional wrong characters."""
-    if req.start_lesson < 1 or req.end_lesson > TOTAL_LESSONS:
+    info = get_grade_info(req.grade_id)
+    if req.start_lesson < 1 or req.end_lesson > info["total_lessons"]:
         raise HTTPException(status_code=400, detail="Invalid lesson range")
     if req.start_lesson > req.end_lesson:
         raise HTTPException(status_code=400, detail="Start lesson must be <= end lesson")
 
-    result = generate_article_with_errors(req.start_lesson, req.end_lesson, req.mode)
+    result = generate_article_with_errors(req.start_lesson, req.end_lesson, req.mode, req.grade_id)
     return result
 
 

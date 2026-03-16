@@ -1,24 +1,39 @@
 import { useEffect, useState } from "react";
-import type { LessonsResponse, PracticeMode } from "../types";
-import { fetchLessons } from "../api";
+import type { LessonsResponse, PracticeMode, GradeOption } from "../types";
+import { fetchLessons, fetchGrades } from "../api";
 
 interface Props {
-  onStart: (start: number, end: number, mode: PracticeMode) => void;
+  onStart: (start: number, end: number, mode: PracticeMode, gradeId: string) => void;
 }
 
 export default function LessonSelector({ onStart }: Props) {
+  const [grades, setGrades] = useState<GradeOption[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState("grade4");
   const [data, setData] = useState<LessonsResponse | null>(null);
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
-  const [endLesson, setEndLesson] = useState(7);
+  const [endLesson, setEndLesson] = useState(6);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
 
+  // Fetch available grades on mount
   useEffect(() => {
-    fetchLessons()
-      .then(setData)
-      .finally(() => setLoading(false));
+    fetchGrades()
+      .then((res) => setGrades(res.grades))
+      .catch(() => {});
   }, []);
+
+  // Fetch lessons when grade changes
+  useEffect(() => {
+    setLoading(true);
+    fetchLessons(selectedGrade)
+      .then((res) => {
+        setData(res);
+        setStartLesson(1);
+        setEndLesson(res.midterm_range[1]);
+      })
+      .finally(() => setLoading(false));
+  }, [selectedGrade]);
 
   if (loading) {
     return <div className="loader">載入中...</div>;
@@ -29,9 +44,21 @@ export default function LessonSelector({ onStart }: Props) {
   }
 
   const quickOptions = [
-    { label: "📖 期中考範圍 (第1-7課)", start: data.midterm_range[0], end: data.midterm_range[1] },
-    { label: "📝 期末考範圍 (第8-14課)", start: data.final_range[0], end: data.final_range[1] },
-    { label: "📚 全學期 (第1-14課)", start: 1, end: data.total_lessons },
+    {
+      label: `📖 期中考範圍 (第${data.midterm_range[0]}-${data.midterm_range[1]}課)`,
+      start: data.midterm_range[0],
+      end: data.midterm_range[1],
+    },
+    {
+      label: `📝 期末考範圍 (第${data.final_range[0]}-${data.final_range[1]}課)`,
+      start: data.final_range[0],
+      end: data.final_range[1],
+    },
+    {
+      label: `📚 全學期 (第1-${data.total_lessons}課)`,
+      start: 1,
+      end: data.total_lessons,
+    },
   ];
 
   return (
@@ -43,6 +70,24 @@ export default function LessonSelector({ onStart }: Props) {
         </p>
       </div>
 
+      {/* Grade selector */}
+      {grades.length > 1 && (
+        <div className="grade-selector">
+          <h3>選擇年級</h3>
+          <div className="grade-options">
+            {grades.map((g) => (
+              <button
+                key={g.id}
+                className={`grade-btn ${selectedGrade === g.id ? "active" : ""}`}
+                onClick={() => setSelectedGrade(g.id)}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Practice mode selector */}
       <div className="practice-mode-selector">
         <h3>練習模式</h3>
@@ -53,7 +98,7 @@ export default function LessonSelector({ onStart }: Props) {
           >
             <span className="mode-icon">📝</span>
             <span className="mode-label">句子改錯</span>
-            <span className="mode-desc">1~2句短句，找出2~3個錯字</span>
+            <span className="mode-desc">多句短句，找出5~7個錯字</span>
           </button>
           <button
             className={`practice-mode-btn ${practiceMode === "article" ? "active" : ""}`}
@@ -87,7 +132,7 @@ export default function LessonSelector({ onStart }: Props) {
             <button
               key={opt.label}
               className="quick-btn"
-              onClick={() => onStart(opt.start, opt.end, practiceMode)}
+              onClick={() => onStart(opt.start, opt.end, practiceMode, selectedGrade)}
             >
               <span className="quick-label">{opt.label}</span>
               <span className="quick-chars">
@@ -162,7 +207,7 @@ export default function LessonSelector({ onStart }: Props) {
 
           <button
             className="start-btn"
-            onClick={() => onStart(startLesson, endLesson, practiceMode)}
+            onClick={() => onStart(startLesson, endLesson, practiceMode, selectedGrade)}
           >
             開始練習！
           </button>
