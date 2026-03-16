@@ -6,6 +6,62 @@ interface Props {
   onStart: (start: number, end: number, mode: PracticeMode, gradeId: string) => void;
 }
 
+function HappyKidsIllustration() {
+  return (
+    <svg
+      viewBox="0 0 320 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: "260px", margin: "0 auto 8px", display: "block" }}
+    >
+      {/* Stars */}
+      <g opacity="0.7">
+        <path d="M30 20l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffe66d" />
+        <path d="M280 15l2 5 5 1-4 3 1 5-4-2-5 2 1-5-3-3 5-1z" fill="#ffe66d" />
+        <path d="M160 8l2 4 4 0-3 3 1 4-4-2-4 2 1-4-3-3 4 0z" fill="#ff6b6b" />
+      </g>
+      {/* Kid 1 - reading book */}
+      <g transform="translate(60, 25)">
+        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
+        <circle cx="14" cy="15" r="2.5" fill="#2d3436" />
+        <circle cx="26" cy="15" r="2.5" fill="#2d3436" />
+        <path d="M15 23 Q20 28 25 23" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M6 4 Q20-6 34 4" fill="#2d3436" />
+        <rect x="6" y="40" width="28" height="24" rx="3" fill="#4ecdc4" />
+        <rect x="2" y="60" width="36" height="10" rx="2" fill="#ffe66d" stroke="#ffd93d" strokeWidth="1" />
+        <line x1="10" y1="63" x2="30" y2="63" stroke="#ffd93d" strokeWidth="1" />
+        <line x1="10" y1="66" x2="25" y2="66" stroke="#ffd93d" strokeWidth="1" />
+      </g>
+      {/* Kid 2 - writing with pencil */}
+      <g transform="translate(145, 25)">
+        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
+        <circle cx="14" cy="15" r="2.5" fill="#2d3436" />
+        <circle cx="26" cy="15" r="2.5" fill="#2d3436" />
+        <path d="M16 24 Q20 27 24 24" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M8 2 Q12-4 16 2 Q20-4 24 2 Q28-4 32 2" fill="#2d3436" />
+        <rect x="6" y="40" width="28" height="24" rx="3" fill="#ff6b6b" />
+        <line x1="38" y1="50" x2="52" y2="66" stroke="#ffa94d" strokeWidth="3" strokeLinecap="round" />
+        <polygon points="52,66 55,68 53,70" fill="#2d3436" />
+      </g>
+      {/* Kid 3 - waving */}
+      <g transform="translate(230, 25)">
+        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
+        <circle cx="14" cy="14" r="2.5" fill="#2d3436" />
+        <circle cx="26" cy="14" r="2.5" fill="#2d3436" />
+        <path d="M14 24 Q20 29 26 24" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M4 6 Q20-8 36 6" fill="#2d3436" />
+        <rect x="6" y="40" width="28" height="24" rx="3" fill="#ffe66d" />
+        <line x1="36" y1="42" x2="44" y2="28" stroke="#ffd8a8" strokeWidth="4" strokeLinecap="round" />
+        <circle cx="45" cy="26" r="4" fill="#ffd8a8" />
+      </g>
+      {/* Hearts */}
+      <g opacity="0.6">
+        <path d="M110 45 Q110 38 116 38 Q122 38 122 45 Q122 52 110 60 Q98 52 98 45 Q98 38 104 38 Q110 38 110 45z" fill="#ff6b6b" transform="scale(0.5) translate(140, 10)" />
+      </g>
+    </svg>
+  );
+}
+
 export default function LessonSelector({ onStart }: Props) {
   const [grades, setGrades] = useState<GradeOption[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("grade4");
@@ -64,7 +120,8 @@ export default function LessonSelector({ onStart }: Props) {
   return (
     <div className="selector-container">
       <div className="selector-header">
-        <h1>✏️ 改錯字練習神器</h1>
+        <HappyKidsIllustration />
+        <h1>改錯字練習神器</h1>
         <p className="subtitle">
           {data.publisher} {data.grade} {data.semester}
         </p>

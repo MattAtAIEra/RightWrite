@@ -1,20 +1,32 @@
 /* ===== Global Reset & Variables ===== */
 :root {
-  --primary: #4a90d9;
-  --primary-dark: #357abd;
-  --success: #4caf50;
-  --danger: #f44336;
-  --warning: #ff9800;
-  --bg: #f5f7fa;
+  --primary: #ff6b6b;
+  --primary-dark: #ee5a5a;
+  --primary-light: #ff8e8e;
+  --secondary: #4ecdc4;
+  --secondary-dark: #3dbdb5;
+  --accent: #ffe66d;
+  --accent-dark: #ffd93d;
+  --success: #51cf66;
+  --success-bg: rgba(81, 207, 102, 0.15);
+  --danger: #ff6b6b;
+  --danger-bg: rgba(255, 107, 107, 0.12);
+  --warning: #ffa94d;
+  --warning-bg: rgba(255, 169, 77, 0.15);
+  --bg: #fef9ef;
+  --bg-pattern: radial-gradient(circle at 20% 80%, rgba(78, 205, 196, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(255, 230, 109, 0.06) 0%, transparent 70%);
   --card-bg: #ffffff;
-  --text: #333333;
-  --text-light: #666666;
-  --border: #e0e0e0;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --radius: 12px;
+  --text: #2d3436;
+  --text-light: #636e72;
+  --border: #dfe6e9;
+  --shadow: 0 4px 16px rgba(45, 52, 54, 0.08);
+  --shadow-hover: 0 8px 24px rgba(45, 52, 54, 0.14);
+  --radius: 20px;
+  --radius-sm: 12px;
 
-  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC",
-    system-ui, sans-serif;
+  font-family: "LXGW WenKai TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   font-size: 16px;
   line-height: 1.6;
   color: var(--text);
@@ -28,8 +40,43 @@
 
 body {
   background: var(--bg);
+  background-image: var(--bg-pattern);
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* Floating decorative dots */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  border-radius: 50%;
+  z-index: -1;
+  opacity: 0.4;
+  animation: float 8s ease-in-out infinite;
+}
+
+body::before {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  top: -60px;
+  right: -60px;
+}
+
+body::after {
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, var(--secondary) 0%, transparent 70%);
+  bottom: -40px;
+  left: -40px;
+  animation-delay: -4s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.05); }
 }
 
 #root {
@@ -44,52 +91,116 @@ body {
   min-height: 100dvh;
 }
 
+/* ===== Animations ===== */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.6) translateY(10px); }
+  60% { transform: scale(1.1) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes confetti {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-60px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes dash {
+  to { stroke-dashoffset: 0; }
+}
+
 /* ===== Loader & Error ===== */
 .loader {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
-  font-size: 1.2rem;
+  min-height: 300px;
+  font-size: 1.3rem;
   color: var(--text-light);
+  font-family: "ZCOOL KuaiLe", "LXGW WenKai TC", sans-serif;
+  animation: bounceIn 0.6s ease-out;
+}
+
+.loader::before {
+  content: "📝";
+  font-size: 2rem;
+  margin-right: 12px;
+  animation: wobble 1s ease-in-out infinite;
 }
 
 .error {
   text-align: center;
   padding: 40px;
   color: var(--danger);
+  font-family: "ZCOOL KuaiLe", "LXGW WenKai TC", sans-serif;
+  font-size: 1.2rem;
 }
 
 /* ===== Lesson Selector ===== */
 .selector-container {
   padding: 20px 0;
+  animation: slideUp 0.5s ease-out;
 }
 
 .selector-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
+  animation: bounceIn 0.6s ease-out;
 }
 
 .selector-header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-bottom: 8px;
+  letter-spacing: 2px;
 }
 
 .subtitle {
   color: var(--text-light);
   font-size: 1rem;
+  background: var(--card-bg);
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 20px;
+  border: 2px dashed var(--border);
 }
 
-/* Practice Mode Selector */
+/* Grade Selector */
 .grade-selector {
   margin-bottom: 24px;
+  animation: slideUp 0.5s ease-out 0.1s both;
 }
 
 .grade-selector h3 {
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 400;
   margin-bottom: 12px;
   color: var(--text);
 }
@@ -102,34 +213,41 @@ body {
 .grade-btn {
   flex: 1;
   padding: 12px 16px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
+  border: 3px solid var(--border);
+  border-radius: var(--radius-sm);
   background: var(--card-bg);
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .grade-btn:hover {
-  border-color: var(--primary);
-  background: #f0f6ff;
+  border-color: var(--secondary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .grade-btn.active {
-  border-color: var(--primary);
-  background: var(--primary);
+  border-color: var(--secondary);
+  background: var(--secondary);
   color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(78, 205, 196, 0.3);
 }
 
+/* Practice Mode Selector */
 .practice-mode-selector {
   margin-bottom: 24px;
+  animation: slideUp 0.5s ease-out 0.15s both;
 }
 
 .practice-mode-selector h3 {
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 400;
   margin-bottom: 12px;
   color: var(--text);
 }
@@ -144,51 +262,61 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 12px;
+  padding: 20px 12px;
   background: var(--card-bg);
-  border: 2px solid var(--border);
+  border: 3px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   text-align: center;
 }
 
 .practice-mode-btn:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow);
+  border-color: var(--primary-light);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
 }
 
 .practice-mode-btn.active {
   border-color: var(--primary);
-  background: rgba(74, 144, 217, 0.06);
-  box-shadow: 0 0 0 1px var(--primary);
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.08) 0%, rgba(255, 230, 109, 0.08) 100%);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow);
+  transform: translateY(-2px);
 }
 
 .mode-icon {
-  font-size: 1.8rem;
-  margin-bottom: 6px;
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+  animation: wobble 2s ease-in-out infinite;
+}
+
+.practice-mode-btn:nth-child(2) .mode-icon {
+  animation-delay: -1s;
 }
 
 .mode-label {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 400;
   color: var(--text);
   margin-bottom: 4px;
 }
 
 .mode-desc {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--text-light);
   line-height: 1.4;
 }
 
+/* Mode Toggle */
 .mode-toggle {
   display: flex;
   gap: 0;
   margin-bottom: 24px;
   border-radius: var(--radius);
   overflow: hidden;
-  border: 2px solid var(--primary);
+  border: 3px solid var(--secondary);
+  animation: slideUp 0.5s ease-out 0.2s both;
 }
 
 .mode-toggle button {
@@ -196,15 +324,16 @@ body {
   padding: 12px;
   border: none;
   background: white;
-  color: var(--primary);
+  color: var(--secondary-dark);
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s;
 }
 
 .mode-toggle button.active {
-  background: var(--primary);
+  background: var(--secondary);
   color: white;
 }
 
@@ -213,36 +342,56 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  animation: slideUp 0.5s ease-out 0.25s both;
 }
 
 .quick-btn {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 20px 24px;
+  padding: 22px 24px;
   background: var(--card-bg);
-  border: 2px solid var(--border);
+  border: 3px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   text-align: left;
   width: 100%;
   font-size: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.quick-btn::after {
+  content: "→";
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.4rem;
+  color: var(--border);
+  transition: all 0.3s;
 }
 
 .quick-btn:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-4px);
+}
+
+.quick-btn:hover::after {
+  color: var(--primary);
+  transform: translateY(-50%) translateX(4px);
 }
 
 .quick-btn:active {
-  transform: translateY(0);
+  transform: translateY(-1px);
 }
 
 .quick-label {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.25rem;
+  font-weight: 400;
   color: var(--text);
 }
 
@@ -258,6 +407,8 @@ body {
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: var(--shadow);
+  border: 3px solid var(--border);
+  animation: slideUp 0.5s ease-out 0.25s both;
 }
 
 .range-selectors {
@@ -272,16 +423,24 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
 }
 
 .range-selectors select {
-  padding: 8px 12px;
-  border: 2px solid var(--border);
-  border-radius: 8px;
+  padding: 10px 14px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius-sm);
   font-size: 1rem;
+  font-family: "LXGW WenKai TC", sans-serif;
   background: white;
   min-width: 180px;
+  transition: border-color 0.2s;
+}
+
+.range-selectors select:focus {
+  outline: none;
+  border-color: var(--secondary);
 }
 
 .lesson-preview {
@@ -294,22 +453,30 @@ body {
 }
 
 .lesson-card {
-  background: var(--bg);
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(255, 230, 109, 0.1) 100%);
+  border-radius: var(--radius-sm);
   padding: 16px;
   text-align: left;
+  border: 2px solid var(--border);
+  transition: transform 0.2s;
+}
+
+.lesson-card:hover {
+  transform: translateX(4px);
 }
 
 .lesson-num {
-  font-size: 0.85rem;
-  color: var(--primary);
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 0.88rem;
+  color: var(--secondary-dark);
+  font-weight: 400;
   margin-bottom: 4px;
 }
 
 .lesson-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
   margin-bottom: 8px;
 }
 
@@ -323,34 +490,51 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   background: white;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 1.1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 1.15rem;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.char-badge:hover {
+  border-color: var(--primary-light);
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2);
 }
 
 .start-btn {
   width: 100%;
-  padding: 16px;
-  background: var(--primary);
+  padding: 18px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
   border: none;
   border-radius: var(--radius);
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.3rem;
+  font-weight: 400;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  letter-spacing: 2px;
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
 }
 
 .start-btn:hover {
-  background: var(--primary-dark);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
+}
+
+.start-btn:active {
+  transform: translateY(0);
 }
 
 /* ===== Article Practice ===== */
 .practice-container {
   padding: 0;
+  animation: slideUp 0.4s ease-out;
 }
 
 .practice-header {
@@ -362,41 +546,84 @@ body {
 }
 
 .back-btn {
-  padding: 8px 16px;
-  background: none;
-  border: 2px solid var(--border);
-  border-radius: 8px;
+  padding: 10px 18px;
+  background: var(--card-bg);
+  border: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1rem;
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  border-color: var(--text-light);
+  transform: translateX(-3px);
 }
 
 .progress-info {
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--primary);
+  font-weight: 400;
+  color: var(--secondary-dark);
+  background: rgba(78, 205, 196, 0.1);
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 2px solid rgba(78, 205, 196, 0.3);
 }
 
 .instruction-bar {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 8px;
-  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(255, 230, 109, 0.3) 0%, rgba(255, 169, 77, 0.15) 100%);
+  border: 3px solid var(--accent-dark);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
   margin-bottom: 16px;
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   text-align: center;
+  font-weight: 700;
+  animation: slideUp 0.4s ease-out 0.1s both;
 }
 
 .article-display {
   background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 28px;
   box-shadow: var(--shadow);
-  font-size: 1.4rem;
-  line-height: 2.4;
-  letter-spacing: 2px;
+  font-size: 1.45rem;
+  line-height: 2.5;
+  letter-spacing: 3px;
   margin-bottom: 16px;
   user-select: none;
+  border: 3px solid var(--border);
+  animation: slideUp 0.4s ease-out 0.15s both;
+  position: relative;
+}
+
+/* Decorative corner marks */
+.article-display::before,
+.article-display::after {
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-style: solid;
+  border-color: var(--accent-dark);
+  opacity: 0.5;
+}
+
+.article-display::before {
+  top: 8px;
+  left: 8px;
+  border-width: 3px 0 0 3px;
+  border-radius: 4px 0 0 0;
+}
+
+.article-display::after {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 3px 3px 0;
+  border-radius: 0 0 4px 0;
 }
 
 .char-wrapper {
@@ -407,12 +634,13 @@ body {
 .article-char {
   cursor: pointer;
   padding: 2px 1px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .article-char:hover {
-  background: rgba(74, 144, 217, 0.1);
+  background: rgba(78, 205, 196, 0.15);
+  transform: scale(1.05);
 }
 
 .article-char.punctuation {
@@ -421,29 +649,37 @@ body {
 
 .article-char.punctuation:hover {
   background: transparent;
+  transform: none;
 }
 
 .article-char.found-correct {
-  background: rgba(76, 175, 80, 0.2);
+  background: var(--success-bg);
   text-decoration: line-through;
   text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
   color: var(--text-light);
+  animation: popIn 0.4s ease-out;
 }
 
 .article-char.found-wrong {
-  background: rgba(244, 67, 54, 0.15);
+  background: var(--danger-bg);
   text-decoration: line-through;
   text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+  animation: popIn 0.4s ease-out;
 }
 
 .article-char.false-alarm {
-  background: rgba(255, 152, 0, 0.2);
+  background: var(--warning-bg);
   text-decoration: line-through;
-  text-decoration-color: var(--danger);
+  text-decoration-color: var(--warning);
+  text-decoration-thickness: 2px;
+  animation: popIn 0.4s ease-out;
 }
 
 .sentence-number {
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-weight: 400;
   color: var(--primary);
   user-select: none;
   margin-right: 2px;
@@ -456,6 +692,7 @@ body {
   vertical-align: super;
   margin-left: -4px;
   margin-right: 2px;
+  animation: popIn 0.3s ease-out;
 }
 
 .annotation.correct {
@@ -472,49 +709,71 @@ body {
   justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
+  animation: slideUp 0.4s ease-out 0.2s both;
 }
 
 .finish-btn {
-  padding: 12px 32px;
-  background: var(--success);
+  padding: 14px 36px;
+  background: linear-gradient(135deg, var(--success) 0%, #40c057 100%);
   color: white;
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
   cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 16px rgba(81, 207, 102, 0.3);
+  letter-spacing: 1px;
+}
+
+.finish-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(81, 207, 102, 0.4);
 }
 
 /* ===== Handwriting Canvas ===== */
 .canvas-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(45, 52, 54, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .canvas-dialog {
   background: white;
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 28px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 24px 80px rgba(45, 52, 54, 0.25);
+  border: 3px solid var(--border);
+  animation: bounceIn 0.4s ease-out;
 }
 
 .canvas-header {
   text-align: center;
-  margin-bottom: 16px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  margin-bottom: 18px;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: var(--text);
 }
 
 .expected-hint {
   display: block;
+  font-family: "LXGW WenKai TC", sans-serif;
   font-size: 0.85rem;
   color: var(--text-light);
   font-weight: 400;
@@ -524,8 +783,8 @@ body {
 .writing-canvas {
   width: 100%;
   aspect-ratio: 1;
-  border: 3px solid var(--border);
-  border-radius: 8px;
+  border: 3px solid var(--secondary);
+  border-radius: var(--radius-sm);
   cursor: crosshair;
   touch-action: none;
   display: block;
@@ -533,79 +792,111 @@ body {
 
 .canvas-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .canvas-actions button {
   flex: 1;
-  padding: 12px;
+  padding: 14px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-clear {
   background: var(--bg);
   color: var(--text);
+  border: 2px solid var(--border) !important;
+}
+
+.btn-clear:hover {
+  background: var(--border);
 }
 
 .btn-cancel {
   background: var(--bg);
   color: var(--text-light);
+  border: 2px solid var(--border) !important;
+}
+
+.btn-cancel:hover {
+  background: var(--border);
 }
 
 .btn-submit {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
   color: white;
+  box-shadow: 0 3px 12px rgba(78, 205, 196, 0.3);
+}
+
+.btn-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(78, 205, 196, 0.4);
 }
 
 .btn-submit:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ===== Result View ===== */
 .result-container {
   padding: 20px 0;
+  animation: slideUp 0.5s ease-out;
 }
 
 .result-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .result-emoji {
-  font-size: 4rem;
-  margin-bottom: 8px;
+  font-size: 5rem;
+  margin-bottom: 12px;
+  animation: bounceIn 0.6s ease-out;
 }
 
 .result-header h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 400;
   color: var(--text);
+  animation: slideUp 0.5s ease-out 0.15s both;
 }
 
 .accuracy-display {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
+  animation: slideUp 0.5s ease-out 0.2s both;
 }
 
 .accuracy-circle {
   position: relative;
-  width: 160px;
-  height: 160px;
-  margin-bottom: 12px;
+  width: 170px;
+  height: 170px;
+  margin-bottom: 14px;
 }
 
 .accuracy-circle svg {
   width: 100%;
   height: 100%;
+}
+
+.accuracy-circle svg circle:first-child {
+  stroke: var(--border);
+}
+
+.accuracy-circle svg circle:last-child {
+  animation: dash 1.2s ease-out forwards;
 }
 
 .accuracy-text {
@@ -617,16 +908,18 @@ body {
 }
 
 .accuracy-number {
-  font-size: 3rem;
-  font-weight: 800;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 3.4rem;
+  font-weight: 400;
   color: var(--text);
 }
 
 .accuracy-percent {
+  font-family: "ZCOOL KuaiLe", sans-serif;
   font-size: 1.5rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-light);
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .accuracy-detail {
@@ -639,13 +932,17 @@ body {
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: var(--shadow);
+  border: 3px solid var(--border);
   margin-bottom: 24px;
+  animation: slideUp 0.5s ease-out 0.3s both;
 }
 
 .result-details h3 {
-  font-size: 1.2rem;
-  font-weight: 700;
-  margin-bottom: 16px;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+  margin-bottom: 18px;
+  color: var(--text);
 }
 
 .result-list {
@@ -655,36 +952,41 @@ body {
 }
 
 .result-item {
-  padding: 16px;
-  border-radius: 8px;
-  border: 2px solid var(--border);
+  padding: 18px;
+  border-radius: var(--radius-sm);
+  border: 3px solid var(--border);
+  transition: transform 0.2s;
+}
+
+.result-item:hover {
+  transform: translateX(4px);
 }
 
 .result-item.correct {
-  border-color: rgba(76, 175, 80, 0.3);
-  background: rgba(76, 175, 80, 0.05);
+  border-color: rgba(81, 207, 102, 0.4);
+  background: linear-gradient(135deg, rgba(81, 207, 102, 0.06) 0%, rgba(81, 207, 102, 0.02) 100%);
 }
 
 .result-item.incorrect {
-  border-color: rgba(244, 67, 54, 0.3);
-  background: rgba(244, 67, 54, 0.05);
+  border-color: rgba(255, 107, 107, 0.35);
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.06) 0%, rgba(255, 107, 107, 0.02) 100%);
 }
 
 .result-chars {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 14px;
+  margin-bottom: 10px;
 }
 
 .wrong-display,
 .correct-display {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
 }
 
 .wrong-display {
-  color: var(--danger);
+  color: var(--primary);
 }
 
 .correct-display {
@@ -700,7 +1002,7 @@ body {
 }
 
 .arrow {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   color: var(--text-light);
 }
 
@@ -716,67 +1018,95 @@ body {
   font-size: 0.85rem;
   color: var(--text-light);
   background: var(--bg);
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 20px;
+  border: 2px solid var(--border);
 }
 
 .status-tag {
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 4px 10px;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 400;
+  padding: 4px 12px;
   border-radius: 20px;
 }
 
 .status-tag.pass {
-  background: rgba(76, 175, 80, 0.15);
-  color: var(--success);
+  background: rgba(81, 207, 102, 0.15);
+  color: #2b8a3e;
 }
 
 .status-tag.fail {
-  background: rgba(244, 67, 54, 0.15);
-  color: var(--danger);
+  background: rgba(255, 107, 107, 0.15);
+  color: #c92a2a;
 }
 
 .false-alarm-title {
-  color: #ff9800;
-  margin-top: 20px;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  color: var(--warning);
+  margin-top: 24px;
 }
 
 .false-alarm-item {
-  border-left-color: #ff9800 !important;
+  border-left: 4px solid var(--warning) !important;
 }
 
 .false-alarm-count {
-  color: #ff9800;
+  color: var(--warning);
+  font-weight: 700;
 }
 
 .result-actions {
   display: flex;
   gap: 12px;
+  animation: slideUp 0.5s ease-out 0.4s both;
 }
 
 .retry-btn {
   flex: 1;
-  padding: 16px;
-  background: var(--primary);
+  padding: 18px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
   cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+  letter-spacing: 1px;
+}
+
+.retry-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
 }
 
 .home-btn {
   flex: 1;
-  padding: 16px;
+  padding: 18px;
   background: var(--card-bg);
   color: var(--text);
-  border: 2px solid var(--border);
+  border: 3px solid var(--border);
   border-radius: var(--radius);
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
   cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.home-btn:hover {
+  border-color: var(--text-light);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+/* ===== Decorative Illustrations ===== */
+.deco-stars {
+  pointer-events: none;
+  position: absolute;
 }
 
 /* ===== Responsive ===== */
@@ -786,13 +1116,14 @@ body {
   }
 
   .selector-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 
   .article-display {
-    padding: 16px;
+    padding: 18px;
     font-size: 1.2rem;
-    line-height: 2.2;
+    line-height: 2.3;
+    letter-spacing: 2px;
   }
 
   .range-selectors {
@@ -809,5 +1140,13 @@ body {
 
   .practice-footer {
     flex-direction: column;
+  }
+
+  .practice-mode-btn {
+    padding: 14px 10px;
+  }
+
+  .mode-icon {
+    font-size: 1.8rem;
   }
 }
