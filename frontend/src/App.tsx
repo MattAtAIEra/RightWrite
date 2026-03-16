@@ -7,14 +7,16 @@ import ResultView from "./components/ResultView";
 
 function App() {
   const [stage, setStage] = useState<AppStage>("select");
-  const [lessonRange, setLessonRange] = useState<[number, number]>([1, 7]);
+  const [lessonRange, setLessonRange] = useState<[number, number]>([1, 6]);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("article");
+  const [gradeId, setGradeId] = useState("grade4");
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [practiceKey, setPracticeKey] = useState(0);
 
-  const handleStart = (start: number, end: number, mode: PracticeMode) => {
+  const handleStart = (start: number, end: number, mode: PracticeMode, grade: string) => {
     setLessonRange([start, end]);
     setPracticeMode(mode);
+    setGradeId(grade);
     setPracticeKey((k) => k + 1);
     setStage("practice");
   };
@@ -43,6 +45,7 @@ function App() {
           startLesson={lessonRange[0]}
           endLesson={lessonRange[1]}
           practiceMode={practiceMode}
+          gradeId={gradeId}
           onFinish={handleFinish}
           onBack={handleBack}
         />

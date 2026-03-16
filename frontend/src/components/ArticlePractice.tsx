@@ -7,6 +7,7 @@ interface Props {
   startLesson: number;
   endLesson: number;
   practiceMode: PracticeMode;
+  gradeId: string;
   onFinish: (results: AnswerResult[]) => void;
   onBack: () => void;
 }
@@ -35,6 +36,7 @@ export default function ArticlePractice({
   startLesson,
   endLesson,
   practiceMode,
+  gradeId,
   onFinish,
   onBack,
 }: Props) {
@@ -52,7 +54,7 @@ export default function ArticlePractice({
 
   useEffect(() => {
     setLoading(true);
-    generateArticle(startLesson, endLesson, practiceMode)
+    generateArticle(startLesson, endLesson, practiceMode, gradeId)
       .then(setArticle)
       .catch(() => alert("生成文章失敗，請重試"))
       .finally(() => setLoading(false));
