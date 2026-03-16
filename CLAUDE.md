@@ -50,6 +50,31 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 **Environment variables**:
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
 
+## Frontend Aesthetics
+
+When generating or modifying frontend UI, always follow these principles:
+
+**Typography**: Use distinctive, beautiful fonts — avoid generic choices like Arial, Inter, Roboto, or system fonts. For this project, use "ZCOOL KuaiLe" for headings (playful/bubbly) and "LXGW WenKai TC" for body text (warm handwriting feel). Both are Google Fonts.
+
+**Color & Theme**: Commit to a cohesive, kid-friendly aesthetic. Use CSS variables for consistency. The palette is warm and playful: coral primary, teal accents, sunny yellow highlights, soft cream backgrounds. Avoid generic blue-on-white or purple gradients.
+
+**Motion**: Use CSS animations for page load reveals (staggered `animation-delay`), hover micro-interactions, and transitions. Prefer CSS-only solutions. Focus on high-impact moments: bouncy entrances, wobble effects, and celebratory animations on results.
+
+**Backgrounds**: Create atmosphere with layered gradients, geometric patterns (polka dots, waves), and contextual decorative elements. Never default to flat solid colors.
+
+**Kid-Friendly Design**: This is for elementary school children (國小四年級). Use:
+- Large, readable text with generous spacing
+- Playful SVG illustrations (happy characters, stars, pencils, books)
+- Rounded, bubbly shapes
+- Bright, engaging colors that feel like a fun adventure
+- Celebratory feedback (confetti, stars, bouncing emojis)
+
+**Avoid**:
+- Overused font families (Inter, Roboto, Arial, system fonts)
+- Clichéd color schemes (purple gradients on white)
+- Predictable layouts and cookie-cutter patterns
+- Generic "AI slop" aesthetics — make creative, distinctive choices
+
 ## Deployment
 
 Google Cloud Run on `asia-east1` via `cloudbuild.yaml`:

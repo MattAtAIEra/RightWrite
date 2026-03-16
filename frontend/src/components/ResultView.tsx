@@ -6,6 +6,37 @@ interface Props {
   onBack: () => void;
 }
 
+function CelebrationStars({ accuracy }: { accuracy: number }) {
+  if (accuracy < 60) return null;
+  return (
+    <svg
+      viewBox="0 0 300 60"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: "240px", margin: "0 auto 4px", display: "block", overflow: "visible" }}
+    >
+      {/* Confetti-like stars */}
+      <g opacity="0.8">
+        <path d="M40 30l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffe66d">
+          <animateTransform attributeName="transform" type="rotate" values="0 40 35;360 40 35" dur="6s" repeatCount="indefinite" />
+        </path>
+        <path d="M150 15l4 8 8 1-6 6 1 8-7-4-7 4 1-8-6-6 8-1z" fill="#ff6b6b">
+          <animateTransform attributeName="transform" type="rotate" values="0 150 22;-360 150 22" dur="8s" repeatCount="indefinite" />
+        </path>
+        <path d="M260 28l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#4ecdc4">
+          <animateTransform attributeName="transform" type="rotate" values="0 260 33;360 260 33" dur="7s" repeatCount="indefinite" />
+        </path>
+        <circle cx="90" cy="25" r="4" fill="#ffa94d" opacity="0.6">
+          <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx="210" cy="20" r="3" fill="#ff6b6b" opacity="0.6">
+          <animate attributeName="r" values="3;5;3" dur="2.5s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </svg>
+  );
+}
+
 export default function ResultView({ results, onRetry, onBack }: Props) {
   // Separate by type
   const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
@@ -39,9 +70,12 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
     return "✗ 答錯";
   };
 
+  const circleColor = accuracy >= 60 ? "#51cf66" : "#ffa94d";
+
   return (
     <div className="result-container">
       <div className="result-header">
+        <CelebrationStars accuracy={accuracy} />
         <div className="result-emoji">{getEmoji(accuracy)}</div>
         <h2>{getMessage(accuracy)}</h2>
       </div>
@@ -54,7 +88,7 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
               cy="50"
               r="45"
               fill="none"
-              stroke="#e0e0e0"
+              stroke="#dfe6e9"
               strokeWidth="8"
             />
             <circle
@@ -62,7 +96,7 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
               cy="50"
               r="45"
               fill="none"
-              stroke={accuracy >= 60 ? "#4caf50" : "#ff9800"}
+              stroke={circleColor}
               strokeWidth="8"
               strokeDasharray={`${accuracy * 2.83} ${283 - accuracy * 2.83}`}
               strokeDashoffset="70.75"
