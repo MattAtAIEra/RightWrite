@@ -18,6 +18,7 @@ export interface AnswerResult {
   isCorrect: boolean;
   lesson: number;
   lessonTitle: string;
+  type: "found_wrong" | "false_alarm" | "missed";
 }
 
 interface CharAnnotation {
@@ -25,7 +26,10 @@ interface CharAnnotation {
   imageData: string;
   isCorrect: boolean;
   userChar: string;
+  type: "found_wrong" | "false_alarm";
 }
+
+const SENTENCE_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
 export default function ArticlePractice({
   startLesson,
@@ -38,11 +42,13 @@ export default function ArticlePractice({
   const [loading, setLoading] = useState(true);
   const [selectedCharIndex, setSelectedCharIndex] = useState<number | null>(null);
   const [annotations, setAnnotations] = useState<Map<number, CharAnnotation>>(new Map());
-  const [foundWrong, setFoundWrong] = useState<Set<number>>(new Set());
   const [showCanvas, setShowCanvas] = useState(false);
-  const [currentWrongChar, setCurrentWrongChar] = useState<WrongChar | null>(null);
+  const [currentClickedChar, setCurrentClickedChar] = useState<{
+    index: number;
+    char: string;
+    wrongChar: WrongChar | null; // null = this is a correct char
+  } | null>(null);
   const [results, setResults] = useState<AnswerResult[]>([]);
-  const [clickedNormal, setClickedNormal] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     setLoading(true);
@@ -65,87 +71,121 @@ export default function ArticlePractice({
     );
   }
 
-  const handleCharClick = (charIndex: number, _char: string) => {
-    // Check if this character is one of the wrong characters
+  const handleCharClick = (charIndex: number, char: string) => {
+    // Already answered this position — skip
+    if (annotations.has(charIndex)) return;
+
+    // Skip punctuation and whitespace
+    if (/[\s，。、；：！？「」『』（）—…\u3000]/.test(char)) return;
+
+    // Check if this is a wrong character
     const wrongChar = article.wrong_chars.find(
       (wc) => wc.position === charIndex
     );
 
-    if (wrongChar) {
-      // Found a wrong character!
-      setCurrentWrongChar(wrongChar);
-      setSelectedCharIndex(charIndex);
-      setShowCanvas(true);
-      setFoundWrong((prev) => new Set(prev).add(charIndex));
-    } else {
-      // Not a wrong character - show brief feedback
-      setClickedNormal((prev) => new Set(prev).add(charIndex));
-      setTimeout(() => {
-        setClickedNormal((prev) => {
-          const next = new Set(prev);
-          next.delete(charIndex);
-          return next;
-        });
-      }, 600);
-    }
+    // Every character opens the handwriting canvas
+    setCurrentClickedChar({ index: charIndex, char, wrongChar: wrongChar || null });
+    setSelectedCharIndex(charIndex);
+    setShowCanvas(true);
   };
 
   const handleCanvasSubmit = async (imageData: string, _drawnChar: string) => {
-    if (!currentWrongChar || selectedCharIndex === null) return;
+    if (!currentClickedChar || selectedCharIndex === null) return;
 
-    try {
-      const response = await recognizeHandwriting(
-        imageData,
-        currentWrongChar.correct_char
-      );
+    const { wrongChar } = currentClickedChar;
 
-      const annotation: CharAnnotation = {
-        charIndex: selectedCharIndex,
-        imageData,
-        isCorrect: response.is_correct,
-        userChar: response.recognized_char,
-      };
+    if (wrongChar) {
+      // User clicked on a WRONG character — check if they wrote the correct one
+      try {
+        const response = await recognizeHandwriting(
+          imageData,
+          wrongChar.correct_char
+        );
 
-      setAnnotations((prev) => {
-        const next = new Map(prev);
-        next.set(selectedCharIndex, annotation);
-        return next;
-      });
+        const annotation: CharAnnotation = {
+          charIndex: selectedCharIndex,
+          imageData,
+          isCorrect: response.is_correct,
+          userChar: response.recognized_char,
+          type: "found_wrong",
+        };
+        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
 
-      const result: AnswerResult = {
-        wrongChar: currentWrongChar.wrong_char,
-        correctChar: currentWrongChar.correct_char,
-        userAnswer: response.recognized_char,
-        isCorrect: response.is_correct,
-        lesson: currentWrongChar.lesson,
-        lessonTitle: currentWrongChar.lesson_title,
-      };
-      setResults((prev) => [...prev.filter((r) => r.wrongChar !== currentWrongChar.wrong_char), result]);
-    } catch {
-      // Fallback if recognition fails
-      const annotation: CharAnnotation = {
-        charIndex: selectedCharIndex,
-        imageData,
-        isCorrect: true,
-        userChar: currentWrongChar.correct_char,
-      };
-      setAnnotations((prev) => {
-        const next = new Map(prev);
-        next.set(selectedCharIndex, annotation);
-        return next;
-      });
+        const result: AnswerResult = {
+          wrongChar: wrongChar.wrong_char,
+          correctChar: wrongChar.correct_char,
+          userAnswer: response.recognized_char,
+          isCorrect: response.is_correct,
+          lesson: wrongChar.lesson,
+          lessonTitle: wrongChar.lesson_title,
+          type: "found_wrong",
+        };
+        setResults((prev) => [
+          ...prev.filter((r) => !(r.type === "found_wrong" && r.wrongChar === wrongChar.wrong_char)),
+          result,
+        ]);
+      } catch {
+        // Fallback: treat as correct
+        const annotation: CharAnnotation = {
+          charIndex: selectedCharIndex,
+          imageData,
+          isCorrect: true,
+          userChar: wrongChar.correct_char,
+          type: "found_wrong",
+        };
+        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
+      }
+    } else {
+      // User clicked on a CORRECT character — this is a false alarm
+      // They tried to "fix" something that wasn't broken
+      const originalChar = currentClickedChar.char;
+
+      try {
+        const response = await recognizeHandwriting(imageData, originalChar);
+
+        // If they wrote the same character back, it's not really a false alarm
+        if (response.recognized_char === originalChar) {
+          // No penalty — they just confirmed the character is correct
+        } else {
+          // They wrote something different → false alarm (penalty)
+          const annotation: CharAnnotation = {
+            charIndex: selectedCharIndex,
+            imageData,
+            isCorrect: false,
+            userChar: response.recognized_char,
+            type: "false_alarm",
+          };
+          setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
+
+          const result: AnswerResult = {
+            wrongChar: originalChar,
+            correctChar: originalChar,
+            userAnswer: response.recognized_char,
+            isCorrect: false,
+            lesson: 0,
+            lessonTitle: "",
+            type: "false_alarm",
+          };
+          setResults((prev) => [...prev, result]);
+        }
+      } catch {
+        // Recognition failed — no penalty
+      }
     }
 
     setShowCanvas(false);
-    setCurrentWrongChar(null);
+    setCurrentClickedChar(null);
     setSelectedCharIndex(null);
   };
 
   const handleFinish = () => {
-    // For any wrong chars not yet found, mark them as missed
     const allResults = [...results];
+    // Mark unfound wrong chars as missed
     for (const wc of article.wrong_chars) {
-      if (!allResults.find((r) => r.wrongChar === wc.wrong_char)) {
+      const found = allResults.find(
+        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char
+      );
+      if (!found) {
         allResults.push({
           wrongChar: wc.wrong_char,
           correctChar: wc.correct_char,
@@ -153,41 +193,66 @@ export default function ArticlePractice({
           isCorrect: false,
           lesson: wc.lesson,
           lessonTitle: wc.lesson_title,
+          type: "missed",
         });
       }
     }
     onFinish(allResults);
   };
 
-  const allFound = foundWrong.size >= article.total_wrong;
+  const answeredCount = annotations.size;
 
   // Render the article text character by character
   const renderArticle = () => {
     const chars = article.display_text.split("");
-    return chars.map((char, index) => {
-      const isWrong = article.wrong_chars.some((wc) => wc.position === index);
-      const annotation = annotations.get(index);
-      const isFound = foundWrong.has(index);
-      const isNormalClicked = clickedNormal.has(index);
+    const elements: React.ReactNode[] = [];
+    let sentenceIndex = 0;
 
-      // Skip whitespace rendering
+    // In sentence mode, add number before first character
+    if (practiceMode === "sentence") {
+      elements.push(
+        <span key="sn-0" className="sentence-number">
+          {SENTENCE_NUMBERS[0] || `${1}.`}{" "}
+        </span>
+      );
+    }
+
+    for (let index = 0; index < chars.length; index++) {
+      const char = chars[index];
+
       if (char === "\n") {
-        return <br key={index} />;
+        elements.push(<br key={`br-${index}`} />);
+        if (practiceMode === "sentence") {
+          sentenceIndex++;
+          elements.push(
+            <span key={`sn-${index}`} className="sentence-number">
+              {SENTENCE_NUMBERS[sentenceIndex] || `${sentenceIndex + 1}.`}{" "}
+            </span>
+          );
+        }
+        continue;
       }
 
-      return (
+      const annotation = annotations.get(index);
+      const isPunctuation = /[\s，。、；：！？「」『』（）—…\u3000]/.test(char);
+
+      let charClass = "article-char";
+      if (annotation) {
+        if (annotation.type === "found_wrong") {
+          charClass += annotation.isCorrect ? " found-correct" : " found-wrong";
+        } else if (annotation.type === "false_alarm") {
+          charClass += " false-alarm";
+        }
+      }
+      if (isPunctuation) {
+        charClass += " punctuation";
+      }
+
+      elements.push(
         <span key={index} className="char-wrapper">
           <span
-            className={`article-char ${
-              isFound
-                ? annotation?.isCorrect
-                  ? "found-correct"
-                  : "found-wrong"
-                : ""
-            } ${isNormalClicked ? "normal-flash" : ""} ${
-              isWrong && !isFound ? "clickable" : ""
-            }`}
-            onClick={() => handleCharClick(index, char)}
+            className={charClass}
+            onClick={() => !isPunctuation && handleCharClick(index, char)}
           >
             {char}
           </span>
@@ -197,12 +262,18 @@ export default function ArticlePractice({
                 annotation.isCorrect ? "correct" : "incorrect"
               }`}
             >
-              {annotation.isCorrect ? annotation.userChar : `→${currentWrongChar?.correct_char || annotation.userChar}`}
+              {annotation.type === "found_wrong"
+                ? annotation.isCorrect
+                  ? annotation.userChar
+                  : `→${annotation.userChar}`
+                : `✗${annotation.userChar}`}
             </span>
           )}
         </span>
       );
-    });
+    }
+
+    return elements;
   };
 
   return (
@@ -212,42 +283,30 @@ export default function ArticlePractice({
           ← 返回
         </button>
         <div className="progress-info">
-          <span>
-            找到 {foundWrong.size} / {article.total_wrong} 個錯字
-          </span>
+          <span>已作答 {answeredCount} 個字</span>
         </div>
       </div>
 
       <div className="instruction-bar">
         {practiceMode === "sentence"
-          ? "💡 請點擊句子中你認為是錯字的字，然後手寫正確的字！"
-          : "💡 請點擊文章中你認為是錯字的字，然後手寫正確的字！"}
+          ? "💡 點擊句子中你認為是錯字的字，手寫出正確的字！"
+          : "💡 點擊文章中你認為是錯字的字，手寫出正確的字！"}
       </div>
 
       <div className="article-display">{renderArticle()}</div>
 
       <div className="practice-footer">
-        {allFound ? (
-          <button className="finish-btn" onClick={handleFinish}>
-            查看結果 📊
-          </button>
-        ) : (
-          <div className="hint-text">
-            還有 {article.total_wrong - foundWrong.size} 個錯字等你找出來！
-          </div>
-        )}
-        <button className="give-up-btn" onClick={handleFinish}>
-          結束練習
+        <button className="finish-btn" onClick={handleFinish}>
+          結束練習，查看結果 📊
         </button>
       </div>
 
-      {showCanvas && currentWrongChar && (
+      {showCanvas && currentClickedChar && (
         <HandwritingCanvas
-          expectedChar={currentWrongChar.correct_char}
           onSubmit={handleCanvasSubmit}
           onCancel={() => {
             setShowCanvas(false);
-            setCurrentWrongChar(null);
+            setCurrentClickedChar(null);
             setSelectedCharIndex(null);
           }}
         />
