@@ -1,13 +1,11 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 
 interface Props {
-  expectedChar: string;
   onSubmit: (imageData: string, drawnChar: string) => void;
   onCancel: () => void;
 }
 
 export default function HandwritingCanvas({
-  expectedChar,
   onSubmit,
   onCancel,
 }: Props) {
@@ -159,15 +157,14 @@ export default function HandwritingCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const imageData = canvas.toDataURL("image/png");
-    onSubmit(imageData, expectedChar);
+    onSubmit(imageData, "");
   };
 
   return (
     <div className="canvas-overlay" onClick={onCancel}>
       <div className="canvas-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="canvas-header">
-          <span>請寫出正確的字</span>
-          <span className="expected-hint">（提示：找出正確的字來替換）</span>
+          <span>請寫出你認為正確的字</span>
         </div>
 
         <canvas

@@ -7,9 +7,15 @@ interface Props {
 }
 
 export default function ResultView({ results, onRetry, onBack }: Props) {
-  const correctCount = results.filter((r) => r.isCorrect).length;
-  const totalCount = results.length;
-  const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+  // Separate by type
+  const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
+  const falseAlarms = results.filter((r) => r.type === "false_alarm");
+
+  // Scoring: 正確率 = 正確找到錯字數 / (總錯字數 + 誤判數)
+  const correctCount = wrongCharResults.filter((r) => r.isCorrect).length;
+  const totalWrong = wrongCharResults.length;
+  const denominator = totalWrong + falseAlarms.length;
+  const accuracy = denominator > 0 ? Math.round((correctCount / denominator) * 100) : 0;
 
   const getEmoji = (acc: number) => {
     if (acc === 100) return "🏆";
@@ -25,6 +31,12 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
     if (acc >= 60) return "不錯喔！再練習會更好！";
     if (acc >= 40) return "加油！多練習幾次就會進步！";
     return "沒關係！我們再練習一次吧！";
+  };
+
+  const getStatusLabel = (r: AnswerResult) => {
+    if (r.type === "missed") return "✗ 未找到";
+    if (r.isCorrect) return "✓ 答對";
+    return "✗ 答錯";
   };
 
   return (
@@ -64,16 +76,19 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
           </div>
         </div>
         <div className="accuracy-detail">
-          答對 {correctCount} / {totalCount} 題
+          找對 {correctCount} / {totalWrong} 個錯字
+          {falseAlarms.length > 0 && (
+            <span className="false-alarm-count">，誤判 {falseAlarms.length} 個</span>
+          )}
         </div>
       </div>
 
       <div className="result-details">
-        <h3>訂正明細</h3>
+        <h3>錯字訂正</h3>
         <div className="result-list">
-          {results.map((r, i) => (
+          {wrongCharResults.map((r, i) => (
             <div
-              key={i}
+              key={`w-${i}`}
               className={`result-item ${r.isCorrect ? "correct" : "incorrect"}`}
             >
               <div className="result-chars">
@@ -92,12 +107,38 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                   第{r.lesson}課 {r.lessonTitle}
                 </span>
                 <span className={`status-tag ${r.isCorrect ? "pass" : "fail"}`}>
-                  {r.isCorrect ? "✓ 答對" : r.userAnswer ? "✗ 答錯" : "✗ 未作答"}
+                  {getStatusLabel(r)}
                 </span>
               </div>
             </div>
           ))}
         </div>
+
+        {falseAlarms.length > 0 && (
+          <>
+            <h3 className="false-alarm-title">誤判紀錄（把對的字改錯）</h3>
+            <div className="result-list">
+              {falseAlarms.map((r, i) => (
+                <div key={`fa-${i}`} className="result-item incorrect false-alarm-item">
+                  <div className="result-chars">
+                    <span className="correct-display">
+                      {r.correctChar}
+                      <small>（原本正確）</small>
+                    </span>
+                    <span className="arrow">→</span>
+                    <span className="wrong-display">
+                      {r.userAnswer}
+                      <small>（誤改為）</small>
+                    </span>
+                  </div>
+                  <div className="result-meta">
+                    <span className={`status-tag fail`}>✗ 誤判扣分</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="result-actions">

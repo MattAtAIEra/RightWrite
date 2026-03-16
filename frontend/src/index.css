@@ -375,8 +375,12 @@ body {
   background: rgba(74, 144, 217, 0.1);
 }
 
-.article-char.clickable {
-  /* No visual distinction - student shouldn't know which are wrong */
+.article-char.punctuation {
+  cursor: default;
+}
+
+.article-char.punctuation:hover {
+  background: transparent;
 }
 
 .article-char.found-correct {
@@ -392,17 +396,17 @@ body {
   text-decoration-color: var(--danger);
 }
 
-.article-char.normal-flash {
-  animation: flash-normal 0.6s ease;
+.article-char.false-alarm {
+  background: rgba(255, 152, 0, 0.2);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
 }
 
-@keyframes flash-normal {
-  0% {
-    background: rgba(74, 144, 217, 0.3);
-  }
-  100% {
-    background: transparent;
-  }
+.sentence-number {
+  font-weight: 700;
+  color: var(--primary);
+  user-select: none;
+  margin-right: 2px;
 }
 
 .annotation {
@@ -425,14 +429,9 @@ body {
 .practice-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.hint-text {
-  color: var(--text-light);
-  font-size: 0.95rem;
 }
 
 .finish-btn {
@@ -444,16 +443,6 @@ body {
   font-size: 1.1rem;
   font-weight: 700;
   cursor: pointer;
-}
-
-.give-up-btn {
-  padding: 12px 24px;
-  background: none;
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 1rem;
-  cursor: pointer;
-  color: var(--text-light);
 }
 
 /* ===== Handwriting Canvas ===== */
@@ -706,6 +695,19 @@ body {
 .status-tag.fail {
   background: rgba(244, 67, 54, 0.15);
   color: var(--danger);
+}
+
+.false-alarm-title {
+  color: #ff9800;
+  margin-top: 20px;
+}
+
+.false-alarm-item {
+  border-left-color: #ff9800 !important;
+}
+
+.false-alarm-count {
+  color: #ff9800;
 }
 
 .result-actions {
