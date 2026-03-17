@@ -759,7 +759,7 @@ body::after {
   max-width: 400px;
   box-shadow: 0 24px 80px rgba(45, 52, 54, 0.25);
   border: 3px solid var(--border);
-  animation: bounceIn 0.4s ease-out;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .canvas-header {
