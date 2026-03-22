@@ -4,10 +4,13 @@ Backend API server
 """
 import base64
 import json
+import logging
 import os
 import random
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from pypinyin import pinyin, Style
 from fastapi import FastAPI, HTTPException, Query
@@ -260,28 +263,31 @@ def recognize_handwriting(req: RecognizeRequest):
     # Try Google Cloud Vision API first
     try:
         recognized, confidence = _recognize_with_vision_api(req.image_data)
+        logger.info("Vision API recognized: %s (expected: %s)", recognized, expected)
         is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
             is_correct=is_correct,
             confidence=confidence,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Vision API failed: %s", e)
 
     # Fallback: use Claude Vision for handwriting recognition
     try:
         recognized, confidence = _recognize_with_claude(req.image_data)
+        logger.info("Claude recognized: %s (expected: %s)", recognized, expected)
         is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
             is_correct=is_correct,
             confidence=confidence,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("Claude recognition failed: %s", e, exc_info=True)
 
     # Last resort: cannot recognize
+    logger.error("All recognition methods failed for expected=%s", expected)
     return RecognizeResponse(
         recognized_char="？",
         is_correct=False,
