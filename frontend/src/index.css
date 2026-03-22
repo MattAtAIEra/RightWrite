@@ -600,6 +600,7 @@ body::after {
   /* 直書 — right-to-left vertical layout like textbooks */
   writing-mode: vertical-rl;
   text-orientation: upright;
+  width: 100%;
   height: 65vh;
   overflow-x: auto;
   overflow-y: hidden;
@@ -740,6 +741,23 @@ body::after {
   color: var(--text-light);
   letter-spacing: 0;
   user-select: none;
+}
+
+/* Tone mark positioning for vertical zhuyin */
+.zy-rt {
+  position: relative;
+}
+
+.zy-body {
+  display: inline;
+}
+
+.zy-tone {
+  position: absolute;
+  top: 0;
+  right: -0.7em;
+  font-size: 0.85em;
+  line-height: 1;
 }
 
 .practice-footer {

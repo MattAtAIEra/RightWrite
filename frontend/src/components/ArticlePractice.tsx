@@ -205,6 +205,22 @@ export default function ArticlePractice({
 
   const answeredCount = annotations.size;
 
+  // Split zhuyin into phonetics + tone mark for vertical layout
+  const TONE_MARKS = "ˊˇˋ˙";
+  const renderZhuyinRt = (zy: string) => {
+    const last = zy[zy.length - 1];
+    if (TONE_MARKS.includes(last)) {
+      const phonetics = zy.slice(0, -1);
+      return (
+        <rt className="zy-rt">
+          <span className="zy-body">{phonetics}</span>
+          <span className="zy-tone">{last}</span>
+        </rt>
+      );
+    }
+    return <rt className="zy-rt">{zy}</rt>;
+  };
+
   // Render the article text character by character
   const renderArticle = () => {
     const chars = article.display_text.split("");
@@ -262,7 +278,7 @@ export default function ArticlePractice({
               onClick={() => !isPunctuation && handleCharClick(index, char)}
             >
               {char}
-              <rt>{zhuyinStr}</rt>
+              {renderZhuyinRt(zhuyinStr)}
             </ruby>
           ) : (
             <span

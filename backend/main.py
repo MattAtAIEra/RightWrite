@@ -253,7 +253,7 @@ def generate_article(req: GenerateArticleRequest):
 def recognize_handwriting(req: RecognizeRequest):
     """
     Recognize handwritten character from canvas image.
-    Uses Google Cloud Vision API if available, otherwise falls back to simple matching.
+    Tries Google Cloud Vision first, then Claude Vision as fallback.
     """
     expected = req.expected_char
 
@@ -269,11 +269,23 @@ def recognize_handwriting(req: RecognizeRequest):
     except Exception:
         pass
 
-    # Fallback: trust the client-side recognition or simple comparison
+    # Fallback: use Claude Vision for handwriting recognition
+    try:
+        recognized, confidence = _recognize_with_claude(req.image_data)
+        is_correct = recognized == expected
+        return RecognizeResponse(
+            recognized_char=recognized,
+            is_correct=is_correct,
+            confidence=confidence,
+        )
+    except Exception:
+        pass
+
+    # Last resort: cannot recognize
     return RecognizeResponse(
-        recognized_char=expected,
-        is_correct=True,
-        confidence=0.5,
+        recognized_char="？",
+        is_correct=False,
+        confidence=0.0,
     )
 
 
@@ -281,7 +293,6 @@ def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
     """Use Google Cloud Vision API to recognize handwritten Chinese character."""
     from google.cloud import vision
 
-    # Remove data URL prefix if present
     if "," in image_data_b64:
         image_data_b64 = image_data_b64.split(",", 1)[1]
 
@@ -295,10 +306,50 @@ def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
 
     if texts:
         recognized = texts[0].description.strip()
-        # Take only the first character
         if recognized:
             return recognized[0], 0.9
     raise ValueError("No text recognized")
+
+
+def _recognize_with_claude(image_data_b64: str) -> tuple[str, float]:
+    """Use Claude Vision to recognize a handwritten Chinese character."""
+    import anthropic
+
+    if "," in image_data_b64:
+        image_data_b64 = image_data_b64.split(",", 1)[1]
+
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=20,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": image_data_b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": (
+                        "這張圖片是一個手寫的中文字（寫在九宮格上）。"
+                        "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
+                        "如果完全無法辨識，只回覆 ？"
+                    ),
+                },
+            ],
+        }],
+    )
+
+    recognized = response.content[0].text.strip()
+    # Accept only a single CJK character
+    if len(recognized) == 1 and '\u4e00' <= recognized <= '\u9fff':
+        return recognized, 0.85
+    raise ValueError(f"Could not recognize character: {recognized!r}")
 
 
 @app.post("/api/check")
