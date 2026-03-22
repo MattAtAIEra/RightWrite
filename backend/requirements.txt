@@ -2,6 +2,6 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.3
 google-cloud-vision==3.8.1
-anthropic==0.42.0
+google-genai>=1.0.0
 python-multipart==0.0.20
 pypinyin>=0.51.0

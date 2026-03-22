@@ -273,10 +273,10 @@ def recognize_handwriting(req: RecognizeRequest):
     except Exception as e:
         logger.warning("Vision API failed: %s", e)
 
-    # Fallback: use Claude Vision for handwriting recognition
+    # Fallback: use Gemini Vision for handwriting recognition
     try:
-        recognized, confidence = _recognize_with_claude(req.image_data)
-        logger.info("Claude recognized: %s (expected: %s)", recognized, expected)
+        recognized, confidence = _recognize_with_gemini(req.image_data)
+        logger.info("Gemini recognized: %s (expected: %s)", recognized, expected)
         is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
@@ -284,7 +284,7 @@ def recognize_handwriting(req: RecognizeRequest):
             confidence=confidence,
         )
     except Exception as e:
-        logger.error("Claude recognition failed: %s", e, exc_info=True)
+        logger.error("Gemini recognition failed: %s", e, exc_info=True)
 
     # Last resort: cannot recognize
     logger.error("All recognition methods failed for expected=%s", expected)
@@ -317,41 +317,31 @@ def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
     raise ValueError("No text recognized")
 
 
-def _recognize_with_claude(image_data_b64: str) -> tuple[str, float]:
-    """Use Claude Vision to recognize a handwritten Chinese character."""
-    import anthropic
+def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
+    """Use Gemini Vision to recognize a handwritten Chinese character."""
+    from google import genai
+    from google.genai import types
 
     if "," in image_data_b64:
         image_data_b64 = image_data_b64.split(",", 1)[1]
 
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=20,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": image_data_b64,
-                    },
-                },
-                {
-                    "type": "text",
-                    "text": (
-                        "這張圖片是一個手寫的中文字（寫在九宮格上）。"
-                        "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
-                        "如果完全無法辨識，只回覆 ？"
-                    ),
-                },
-            ],
-        }],
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            types.Part.from_bytes(
+                data=base64.b64decode(image_data_b64),
+                mime_type="image/png",
+            ),
+            (
+                "這張圖片是一個手寫的中文字（寫在九宮格上）。"
+                "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
+                "如果完全無法辨識，只回覆 ？"
+            ),
+        ],
     )
 
-    recognized = response.content[0].text.strip()
+    recognized = response.text.strip()
     # Accept only a single CJK character
     if len(recognized) == 1 and '\u4e00' <= recognized <= '\u9fff':
         return recognized, 0.85

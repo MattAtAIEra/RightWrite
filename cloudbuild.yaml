@@ -27,6 +27,6 @@ steps:
       - "--port"
       - "8080"
       - "--set-secrets"
-      - "ANTHROPIC_API_KEY=anthropic-api-key:latest"
+      - "GEMINI_API_KEY=gemini-api-key:latest"
 images:
   - "gcr.io/$PROJECT_ID/rightwrite"
