@@ -591,13 +591,19 @@ body::after {
   padding: 28px;
   box-shadow: var(--shadow);
   font-size: 1.45rem;
-  line-height: 2.5;
   letter-spacing: 3px;
   margin-bottom: 16px;
   user-select: none;
   border: 3px solid var(--border);
   animation: slideUp 0.4s ease-out 0.15s both;
   position: relative;
+  /* 直書 — right-to-left vertical layout like textbooks */
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  height: 65vh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  line-height: 2.2;
 }
 
 /* Decorative corner marks */
@@ -682,16 +688,14 @@ body::after {
   font-weight: 400;
   color: var(--primary);
   user-select: none;
-  margin-right: 2px;
 }
 
 .annotation {
-  position: relative;
-  font-size: 0.7em;
+  font-size: 0.6em;
   font-weight: 700;
-  vertical-align: super;
-  margin-left: -4px;
-  margin-right: 2px;
+  writing-mode: vertical-rl;
+  display: inline;
+  margin-top: -2px;
   animation: popIn 0.3s ease-out;
 }
 
@@ -722,15 +726,16 @@ body::after {
 }
 
 .article-display.with-zhuyin {
-  line-height: 3.2;
+  line-height: 2.8;
 }
 
 .article-display ruby {
   ruby-align: center;
+  ruby-position: over;  /* right side in vertical-rl */
 }
 
 .article-display rt {
-  font-size: 0.45em;
+  font-size: 0.38em;
   font-weight: 400;
   color: var(--text-light);
   letter-spacing: 0;
@@ -1156,8 +1161,9 @@ body::after {
   .article-display {
     padding: 18px;
     font-size: 1.2rem;
-    line-height: 2.3;
+    line-height: 2.0;
     letter-spacing: 2px;
+    height: 55vh;
   }
 
   .range-selectors {
@@ -1185,10 +1191,10 @@ body::after {
   }
 
   .article-display.with-zhuyin {
-    line-height: 3.0;
+    line-height: 2.6;
   }
 
   .article-display rt {
-    font-size: 0.4em;
+    font-size: 0.35em;
   }
 }
