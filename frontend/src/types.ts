@@ -39,6 +39,7 @@ export interface ArticleResponse {
   display_text: string;
   wrong_chars: WrongChar[];
   total_wrong: number;
+  zhuyin: string[];
 }
 
 export interface RecognizeResponse {

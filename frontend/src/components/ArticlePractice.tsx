@@ -50,6 +50,7 @@ export default function ArticlePractice({
     char: string;
     wrongChar: WrongChar | null; // null = this is a correct char
   } | null>(null);
+  const [showZhuyin, setShowZhuyin] = useState(false);
   const [results, setResults] = useState<AnswerResult[]>([]);
 
   useEffect(() => {
@@ -250,14 +251,27 @@ export default function ArticlePractice({
         charClass += " punctuation";
       }
 
+      const zhuyinStr = showZhuyin ? (article.zhuyin?.[index] || "") : "";
+      const isChineseChar = /[\u4e00-\u9fff]/.test(char);
+
       elements.push(
         <span key={index} className="char-wrapper">
-          <span
-            className={charClass}
-            onClick={() => !isPunctuation && handleCharClick(index, char)}
-          >
-            {char}
-          </span>
+          {showZhuyin && isChineseChar && zhuyinStr ? (
+            <ruby
+              className={charClass}
+              onClick={() => !isPunctuation && handleCharClick(index, char)}
+            >
+              {char}
+              <rt>{zhuyinStr}</rt>
+            </ruby>
+          ) : (
+            <span
+              className={charClass}
+              onClick={() => !isPunctuation && handleCharClick(index, char)}
+            >
+              {char}
+            </span>
+          )}
           {annotation && (
             <span
               className={`annotation ${
@@ -287,6 +301,12 @@ export default function ArticlePractice({
         <div className="progress-info">
           <span>已作答 {answeredCount} 個字</span>
         </div>
+        <button
+          className="zhuyin-toggle-btn"
+          onClick={() => setShowZhuyin((v) => !v)}
+        >
+          {showZhuyin ? "隱藏注音" : "顯示注音"}
+        </button>
       </div>
 
       <div className="instruction-bar">
@@ -295,7 +315,9 @@ export default function ArticlePractice({
           : "💡 點擊文章中你認為是錯字的字，手寫出正確的字！"}
       </div>
 
-      <div className="article-display">{renderArticle()}</div>
+      <div className={`article-display ${showZhuyin ? "with-zhuyin" : ""}`}>
+        {renderArticle()}
+      </div>
 
       <div className="practice-footer">
         <button className="finish-btn" onClick={handleFinish}>

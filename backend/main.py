@@ -9,6 +9,7 @@ import random
 import re
 from pathlib import Path
 
+from pypinyin import pinyin, Style
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -50,6 +51,7 @@ class GenerateArticleResponse(BaseModel):
     display_text: str
     wrong_chars: list[dict]  # [{position, wrong_char, correct_char, lesson}]
     total_wrong: int
+    zhuyin: list[str]  # per-character zhuyin, same length as display_text
 
 
 class RecognizeRequest(BaseModel):
@@ -71,6 +73,25 @@ class CheckAnswerRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Article generation with intentional wrong characters
 # ---------------------------------------------------------------------------
+
+
+def _generate_zhuyin(text: str) -> list[str]:
+    """Generate per-character zhuyin for the display text.
+
+    Process line-by-line so that newlines don't cause pypinyin to merge
+    tokens across line boundaries (e.g. ``。\\n`` → single reading).
+    """
+    result: list[str] = []
+    for i, line in enumerate(text.split("\n")):
+        if i > 0:
+            result.append("")  # placeholder for the \n character
+        readings = pinyin(line, style=Style.BOPOMOFO, heteronym=False)
+        for char, reading_list in zip(line, readings):
+            if '\u4e00' <= char <= '\u9fff':
+                result.append(reading_list[0])
+            else:
+                result.append("")
+    return result
 
 
 def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grade4") -> dict[str, list[str]]:
@@ -168,6 +189,7 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
         "display_text": display_text,
         "wrong_chars": wrong_chars_info,
         "total_wrong": len(wrong_chars_info),
+        "zhuyin": _generate_zhuyin(display_text),
     }
 
 

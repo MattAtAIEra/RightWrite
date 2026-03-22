@@ -703,6 +703,40 @@ body::after {
   color: var(--danger);
 }
 
+/* ===== Zhuyin toggle & ruby annotations ===== */
+
+.zhuyin-toggle-btn {
+  padding: 6px 14px;
+  background: none;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.zhuyin-toggle-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.article-display.with-zhuyin {
+  line-height: 3.2;
+}
+
+.article-display ruby {
+  ruby-align: center;
+}
+
+.article-display rt {
+  font-size: 0.45em;
+  font-weight: 400;
+  color: var(--text-light);
+  letter-spacing: 0;
+  user-select: none;
+}
+
 .practice-footer {
   display: flex;
   align-items: center;
@@ -1148,5 +1182,13 @@ body::after {
 
   .mode-icon {
     font-size: 1.8rem;
+  }
+
+  .article-display.with-zhuyin {
+    line-height: 3.0;
+  }
+
+  .article-display rt {
+    font-size: 0.4em;
   }
 }
