@@ -109,31 +109,61 @@ def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grad
     return lookup
 
 
+def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
+    """Use Gemini to generate natural sentences, each containing one of the given words."""
+    from google import genai
+    from google.genai import types
+
+    words_list = "、".join(words)
+    prompt = (
+        f"請為以下每個詞語各造一個適合國小四年級學生閱讀的句子。\n"
+        f"詞語：{words_list}\n\n"
+        f"規則：\n"
+        f"- 每個詞語造一個句子，句子長度 15～30 字\n"
+        f"- 句子必須完整包含該詞語（不可拆開或變形）\n"
+        f"- 用字遣詞要符合國小四年級程度\n"
+        f"- 每行一個句子，句子結尾要有句號\n"
+        f"- 只輸出句子，不要編號、不要詞語標示、不要任何多餘文字\n"
+        f"- 共 {len(words)} 個句子，順序與詞語順序一致"
+    )
+
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-3.1-flash-lite",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=256),
+            temperature=0.9,
+        ),
+    )
+
+    lines = [line.strip() for line in response.text.strip().split("\n") if line.strip()]
+    if len(lines) < len(words):
+        raise ValueError(f"Gemini returned {len(lines)} sentences for {len(words)} words")
+    return lines[:len(words)]
+
+
 def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article", grade_id: str = "grade4") -> dict:
     """
     Generate content with wrong characters from the selected lessons.
     Uses compound words (詞語) as the unit — each wrong character always
-    appears within a word in a real example sentence, so there is enough
+    appears within a word in a Gemini-generated sentence, so there is enough
     context for students to identify the error.
     """
     compounds_pool = get_all_compounds_in_range(start_lesson, end_lesson, grade_id)
     char_lookup = _build_char_lookup(start_lesson, end_lesson, grade_id)
 
-    # Filter to compounds that have usable example sentences
+    # Filter to compounds that have swappable characters
     usable = []
     for comp in compounds_pool:
         word = comp["word"]
-        examples = [ex for ex in comp.get("examples", []) if len(ex) >= 5 and word in ex]
-        if not examples:
-            continue
-        # Find which characters in this word have similar_wrong mappings
         swappable = [(i, ch) for i, ch in enumerate(word) if ch in char_lookup]
         if not swappable:
             continue
-        usable.append({**comp, "_examples": examples, "_swappable": swappable})
+        usable.append({**comp, "_swappable": swappable})
 
     if not usable:
-        raise HTTPException(status_code=400, detail="No usable compound examples found for the selected range")
+        raise HTTPException(status_code=400, detail="No usable compounds found for the selected range")
 
     if mode == "sentence":
         num_wrong = min(random.randint(5, 7), len(usable))
@@ -141,18 +171,33 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
         num_wrong = min(random.randint(5, 8), len(usable))
 
     selected = random.sample(usable, num_wrong)
+    words = [comp["word"] for comp in selected]
+
+    # Generate sentences with Gemini
+    try:
+        sentences = _generate_sentences_with_gemini(words)
+    except Exception as e:
+        logger.error("Gemini sentence generation failed: %s", e)
+        # Fallback: use pre-existing example sentences
+        sentences = []
+        for comp in selected:
+            examples = [ex for ex in comp.get("examples", []) if comp["word"] in ex]
+            sentences.append(random.choice(examples) if examples else f"他學會了{comp['word']}這個詞語。")
 
     wrong_chars_info = []
     original_lines = []
     display_lines = []
 
-    for comp_info in selected:
+    for i, comp_info in enumerate(selected):
         word = comp_info["word"]
         lesson_num = comp_info["lesson"]
         lesson_title = comp_info["lesson_title"]
+        original_sentence = sentences[i]
 
-        # Pick a random example sentence
-        original_sentence = random.choice(comp_info["_examples"])
+        # Verify the word appears in the sentence; fallback if not
+        if word not in original_sentence:
+            examples = [ex for ex in comp_info.get("examples", []) if word in ex]
+            original_sentence = random.choice(examples) if examples else f"他學會了{word}這個詞語。"
 
         # Pick a random swappable character from the word
         _idx, correct_char = random.choice(comp_info["_swappable"])
@@ -327,7 +372,7 @@ def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
 
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3.1-flash-lite",
         contents=[
             types.Part.from_bytes(
                 data=base64.b64decode(image_data_b64),
