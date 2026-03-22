@@ -129,7 +129,7 @@ def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
 
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.1-flash-lite-preview",
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=256),
@@ -372,7 +372,7 @@ def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
 
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.1-flash-lite-preview",
         contents=[
             types.Part.from_bytes(
                 data=base64.b64decode(image_data_b64),
