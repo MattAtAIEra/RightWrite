@@ -62,15 +62,25 @@ function HappyKidsIllustration() {
   );
 }
 
+const PUBLISHERS = ["康軒版", "南一版", "翰林版"];
+const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
+
 export default function LessonSelector({ onStart }: Props) {
   const [grades, setGrades] = useState<GradeOption[]>([]);
-  const [selectedGrade, setSelectedGrade] = useState("grade4");
+  const [selectedPublisher, setSelectedPublisher] = useState("康軒版");
+  const [selectedGradeNum, setSelectedGradeNum] = useState(4);
   const [data, setData] = useState<LessonsResponse | null>(null);
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
   const [endLesson, setEndLesson] = useState(6);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
+
+  // Derive grade_id from publisher + grade selection
+  const selectedGrade =
+    grades.find(
+      (g) => g.publisher === selectedPublisher && g.grade === GRADE_LABELS[selectedGradeNum - 1]
+    )?.id || "";
 
   // Fetch available grades on mount
   useEffect(() => {
@@ -79,8 +89,9 @@ export default function LessonSelector({ onStart }: Props) {
       .catch(() => {});
   }, []);
 
-  // Fetch lessons when grade changes
+  // Fetch lessons when derived grade_id changes
   useEffect(() => {
+    if (!selectedGrade) return;
     setLoading(true);
     fetchLessons(selectedGrade)
       .then((res) => {
@@ -127,18 +138,36 @@ export default function LessonSelector({ onStart }: Props) {
         </p>
       </div>
 
+      {/* Publisher selector */}
+      {grades.length > 1 && (
+        <div className="grade-selector">
+          <h3>出版社</h3>
+          <div className="grade-options">
+            {PUBLISHERS.map((pub) => (
+              <button
+                key={pub}
+                className={`grade-btn ${selectedPublisher === pub ? "active" : ""}`}
+                onClick={() => setSelectedPublisher(pub)}
+              >
+                {pub.replace("版", "")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Grade selector */}
       {grades.length > 1 && (
         <div className="grade-selector">
-          <h3>選擇年級</h3>
+          <h3>年級</h3>
           <div className="grade-options">
-            {grades.map((g) => (
+            {GRADE_LABELS.map((label, i) => (
               <button
-                key={g.id}
-                className={`grade-btn ${selectedGrade === g.id ? "active" : ""}`}
-                onClick={() => setSelectedGrade(g.id)}
+                key={label}
+                className={`grade-btn ${selectedGradeNum === i + 1 ? "active" : ""}`}
+                onClick={() => setSelectedGradeNum(i + 1)}
               >
-                {g.label}
+                {label.replace("年級", "")}
               </button>
             ))}
           </div>
