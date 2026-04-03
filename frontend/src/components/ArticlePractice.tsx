@@ -194,8 +194,9 @@ export default function ArticlePractice({
   }
 
   const handleCharClick = (charIndex: number, char: string) => {
-    // Already answered this position — skip
-    if (annotations.has(charIndex)) return;
+    // Skip if recognition is still pending
+    const existing = annotations.get(charIndex);
+    if (existing?.pending) return;
 
     // Skip punctuation and whitespace
     if (/[\s，。、；：！？「」『』（）—…\u3000]/.test(char)) return;

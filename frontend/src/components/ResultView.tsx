@@ -1,9 +1,49 @@
+import { useEffect, useState } from "react";
 import type { AnswerResult } from "./ArticlePractice";
 
 interface Props {
   results: AnswerResult[];
   onRetry: () => void;
   onBack: () => void;
+}
+
+function ConfettiCelebration() {
+  const [particles] = useState(() =>
+    Array.from({ length: 40 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      delay: Math.random() * 0.8,
+      duration: 1.5 + Math.random() * 1.5,
+      size: 6 + Math.random() * 8,
+      color: ["#ff6b6b", "#4ecdc4", "#ffe66d", "#ffa94d", "#51cf66", "#ff8e8e"][
+        Math.floor(Math.random() * 6)
+      ],
+      drift: -30 + Math.random() * 60,
+      rotation: Math.random() * 360,
+    }))
+  );
+
+  return (
+    <div className="confetti-container" aria-hidden="true">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="confetti-piece"
+          style={{
+            left: `${p.x}%`,
+            width: `${p.size}px`,
+            height: `${p.size * 0.6}px`,
+            backgroundColor: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            borderRadius: Math.random() > 0.5 ? "50%" : "2px",
+            ["--drift" as string]: `${p.drift}px`,
+            ["--rotation" as string]: `${p.rotation}deg`,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 function CelebrationStars({ accuracy }: { accuracy: number }) {
@@ -15,7 +55,6 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
       xmlns="http://www.w3.org/2000/svg"
       style={{ width: "240px", margin: "0 auto 4px", display: "block", overflow: "visible" }}
     >
-      {/* Confetti-like stars */}
       <g opacity="0.8">
         <path d="M40 30l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffe66d">
           <animateTransform attributeName="transform" type="rotate" values="0 40 35;360 40 35" dur="6s" repeatCount="indefinite" />
@@ -38,15 +77,24 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
 }
 
 export default function ResultView({ results, onRetry, onBack }: Props) {
-  // Separate by type
+  const [showConfetti, setShowConfetti] = useState(false);
+
   const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
   const falseAlarms = results.filter((r) => r.type === "false_alarm");
 
-  // Scoring: 正確率 = 正確找到錯字數 / (總錯字數 + 誤判數)
   const correctCount = wrongCharResults.filter((r) => r.isCorrect).length;
   const totalWrong = wrongCharResults.length;
   const denominator = totalWrong + falseAlarms.length;
   const accuracy = denominator > 0 ? Math.round((correctCount / denominator) * 100) : 0;
+
+  // Trigger confetti on perfect score
+  useEffect(() => {
+    if (accuracy === 100) {
+      setShowConfetti(true);
+      const timer = setTimeout(() => setShowConfetti(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [accuracy]);
 
   const getEmoji = (acc: number) => {
     if (acc === 100) return "🏆";
@@ -74,9 +122,16 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
 
   return (
     <div className="result-container">
+      {showConfetti && <ConfettiCelebration />}
+
       <div className="result-header">
         <CelebrationStars accuracy={accuracy} />
-        <div className="result-emoji">{getEmoji(accuracy)}</div>
+        <div className={`result-emoji ${accuracy === 100 ? "perfect-bounce" : ""}`}>
+          {getEmoji(accuracy)}
+        </div>
+        {accuracy === 100 && (
+          <div className="perfect-banner">恭喜全對</div>
+        )}
         <h2>{getMessage(accuracy)}</h2>
       </div>
 
@@ -131,10 +186,29 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                   <small>（錯字）</small>
                 </span>
                 <span className="arrow">→</span>
-                <span className="correct-display">
-                  {r.correctChar}
-                  <small>（正確）</small>
-                </span>
+                {r.type === "found_wrong" && r.userAnswer && (
+                  <>
+                    <span className={`user-answer-display ${r.isCorrect ? "correct" : "incorrect"}`}>
+                      {r.userAnswer}
+                      <small>（你寫的）</small>
+                    </span>
+                    {!r.isCorrect && (
+                      <>
+                        <span className="arrow">→</span>
+                        <span className="correct-display">
+                          {r.correctChar}
+                          <small>（正確）</small>
+                        </span>
+                      </>
+                    )}
+                  </>
+                )}
+                {(r.type === "missed" || !r.userAnswer) && (
+                  <span className="correct-display">
+                    {r.correctChar}
+                    <small>（正確）</small>
+                  </span>
+                )}
               </div>
               <div className="result-meta">
                 <span className="lesson-tag">
