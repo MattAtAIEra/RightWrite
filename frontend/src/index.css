@@ -684,6 +684,16 @@ body::after {
   animation: popIn 0.4s ease-out;
 }
 
+.article-char.pending-recognition {
+  background: rgba(78, 205, 196, 0.15);
+  animation: pendingPulse 1s ease-in-out infinite;
+}
+
+@keyframes pendingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .sentence-number {
   font-family: "ZCOOL KuaiLe", sans-serif;
   font-weight: 400;
@@ -706,6 +716,11 @@ body::after {
 
 .annotation.incorrect {
   color: var(--danger);
+}
+
+.annotation.pending {
+  color: var(--secondary);
+  animation: pendingPulse 1s ease-in-out infinite;
 }
 
 /* ===== Zhuyin toggle & ruby annotations ===== */

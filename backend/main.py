@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from vocab_data import (
-    GRADE_REGISTRY,
+    get_grade_registry,
     get_grade_info,
     get_vocab_data,
     get_all_characters_in_range,
@@ -249,7 +249,7 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
 def get_grades():
     """Get all available grades."""
     grades = []
-    for grade_id, info in GRADE_REGISTRY.items():
+    for grade_id, info in get_grade_registry().items():
         grades.append({
             "id": grade_id,
             "label": info["label"],

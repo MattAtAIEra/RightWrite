@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
@@ -28,6 +28,7 @@ interface CharAnnotation {
   isCorrect: boolean;
   userChar: string;
   type: "found_wrong" | "false_alarm";
+  pending?: boolean;
 }
 
 const SENTENCE_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
@@ -61,6 +62,124 @@ export default function ArticlePractice({
       .finally(() => setLoading(false));
   }, [startLesson, endLesson, practiceMode]);
 
+  // Fire-and-forget recognition for a wrong character
+  const recognizeWrongChar = useCallback(
+    (imageData: string, charIndex: number, wrongChar: WrongChar) => {
+      // Set pending annotation immediately
+      const pendingAnnotation: CharAnnotation = {
+        charIndex,
+        imageData,
+        isCorrect: false,
+        userChar: "…",
+        type: "found_wrong",
+        pending: true,
+      };
+      setAnnotations((prev) => new Map(prev).set(charIndex, pendingAnnotation));
+
+      recognizeHandwriting(imageData, wrongChar.correct_char)
+        .then((response) => {
+          const annotation: CharAnnotation = {
+            charIndex,
+            imageData,
+            isCorrect: response.is_correct,
+            userChar: response.recognized_char,
+            type: "found_wrong",
+          };
+          setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+
+          const result: AnswerResult = {
+            wrongChar: wrongChar.wrong_char,
+            correctChar: wrongChar.correct_char,
+            userAnswer: response.recognized_char,
+            isCorrect: response.is_correct,
+            lesson: wrongChar.lesson,
+            lessonTitle: wrongChar.lesson_title,
+            type: "found_wrong",
+          };
+          setResults((prev) => [
+            ...prev.filter(
+              (r) =>
+                !(
+                  r.type === "found_wrong" &&
+                  r.wrongChar === wrongChar.wrong_char
+                )
+            ),
+            result,
+          ]);
+        })
+        .catch(() => {
+          // Fallback: treat as correct
+          const annotation: CharAnnotation = {
+            charIndex,
+            imageData,
+            isCorrect: true,
+            userChar: wrongChar.correct_char,
+            type: "found_wrong",
+          };
+          setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+        });
+    },
+    []
+  );
+
+  // Fire-and-forget recognition for a correct character (false alarm check)
+  const recognizeCorrectChar = useCallback(
+    (imageData: string, charIndex: number, originalChar: string) => {
+      // Set pending annotation
+      const pendingAnnotation: CharAnnotation = {
+        charIndex,
+        imageData,
+        isCorrect: false,
+        userChar: "…",
+        type: "false_alarm",
+        pending: true,
+      };
+      setAnnotations((prev) => new Map(prev).set(charIndex, pendingAnnotation));
+
+      recognizeHandwriting(imageData, originalChar)
+        .then((response) => {
+          if (response.recognized_char === originalChar) {
+            // No penalty — they confirmed the character is correct
+            setAnnotations((prev) => {
+              const next = new Map(prev);
+              next.delete(charIndex);
+              return next;
+            });
+          } else {
+            // False alarm (penalty)
+            const annotation: CharAnnotation = {
+              charIndex,
+              imageData,
+              isCorrect: false,
+              userChar: response.recognized_char,
+              type: "false_alarm",
+            };
+            setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+
+            const result: AnswerResult = {
+              wrongChar: originalChar,
+              correctChar: originalChar,
+              userAnswer: response.recognized_char,
+              isCorrect: false,
+              lesson: 0,
+              lessonTitle: "",
+              type: "false_alarm",
+            };
+            setResults((prev) => [...prev, result]);
+          }
+        })
+        .catch(() => {
+          // Recognition failed — remove pending, no penalty
+          setAnnotations((prev) => {
+            const next = new Map(prev);
+            next.delete(charIndex);
+            return next;
+          });
+        });
+    },
+    []
+  );
+
   if (loading) {
     return <div className="loader">{practiceMode === "sentence" ? "正在生成練習句子..." : "正在生成練習文章..."}</div>;
   }
@@ -92,93 +211,23 @@ export default function ArticlePractice({
     setShowCanvas(true);
   };
 
-  const handleCanvasSubmit = async (imageData: string, _drawnChar: string) => {
+  const handleCanvasSubmit = (imageData: string, _drawnChar: string) => {
     if (!currentClickedChar || selectedCharIndex === null) return;
 
     const { wrongChar } = currentClickedChar;
+    const charIndex = selectedCharIndex;
 
-    if (wrongChar) {
-      // User clicked on a WRONG character — check if they wrote the correct one
-      try {
-        const response = await recognizeHandwriting(
-          imageData,
-          wrongChar.correct_char
-        );
-
-        const annotation: CharAnnotation = {
-          charIndex: selectedCharIndex,
-          imageData,
-          isCorrect: response.is_correct,
-          userChar: response.recognized_char,
-          type: "found_wrong",
-        };
-        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-
-        const result: AnswerResult = {
-          wrongChar: wrongChar.wrong_char,
-          correctChar: wrongChar.correct_char,
-          userAnswer: response.recognized_char,
-          isCorrect: response.is_correct,
-          lesson: wrongChar.lesson,
-          lessonTitle: wrongChar.lesson_title,
-          type: "found_wrong",
-        };
-        setResults((prev) => [
-          ...prev.filter((r) => !(r.type === "found_wrong" && r.wrongChar === wrongChar.wrong_char)),
-          result,
-        ]);
-      } catch {
-        // Fallback: treat as correct
-        const annotation: CharAnnotation = {
-          charIndex: selectedCharIndex,
-          imageData,
-          isCorrect: true,
-          userChar: wrongChar.correct_char,
-          type: "found_wrong",
-        };
-        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-      }
-    } else {
-      // User clicked on a CORRECT character — this is a false alarm
-      // They tried to "fix" something that wasn't broken
-      const originalChar = currentClickedChar.char;
-
-      try {
-        const response = await recognizeHandwriting(imageData, originalChar);
-
-        // If they wrote the same character back, it's not really a false alarm
-        if (response.recognized_char === originalChar) {
-          // No penalty — they just confirmed the character is correct
-        } else {
-          // They wrote something different → false alarm (penalty)
-          const annotation: CharAnnotation = {
-            charIndex: selectedCharIndex,
-            imageData,
-            isCorrect: false,
-            userChar: response.recognized_char,
-            type: "false_alarm",
-          };
-          setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-
-          const result: AnswerResult = {
-            wrongChar: originalChar,
-            correctChar: originalChar,
-            userAnswer: response.recognized_char,
-            isCorrect: false,
-            lesson: 0,
-            lessonTitle: "",
-            type: "false_alarm",
-          };
-          setResults((prev) => [...prev, result]);
-        }
-      } catch {
-        // Recognition failed — no penalty
-      }
-    }
-
+    // Dismiss canvas immediately for better UX
     setShowCanvas(false);
     setCurrentClickedChar(null);
     setSelectedCharIndex(null);
+
+    // Fire off recognition in background
+    if (wrongChar) {
+      recognizeWrongChar(imageData, charIndex, wrongChar);
+    } else {
+      recognizeCorrectChar(imageData, charIndex, currentClickedChar.char);
+    }
   };
 
   const handleFinish = () => {
@@ -203,7 +252,7 @@ export default function ArticlePractice({
     onFinish(allResults);
   };
 
-  const answeredCount = annotations.size;
+  const answeredCount = [...annotations.values()].filter((a) => !a.pending).length;
 
   // Split zhuyin into phonetics + tone mark for vertical layout
   const TONE_MARKS = "ˊˇˋ˙";
@@ -257,7 +306,9 @@ export default function ArticlePractice({
 
       let charClass = "article-char";
       if (annotation) {
-        if (annotation.type === "found_wrong") {
+        if (annotation.pending) {
+          charClass += " pending-recognition";
+        } else if (annotation.type === "found_wrong") {
           charClass += annotation.isCorrect ? " found-correct" : " found-wrong";
         } else if (annotation.type === "false_alarm") {
           charClass += " false-alarm";
@@ -291,10 +342,16 @@ export default function ArticlePractice({
           {annotation && (
             <span
               className={`annotation ${
-                annotation.isCorrect ? "correct" : "incorrect"
+                annotation.pending
+                  ? "pending"
+                  : annotation.isCorrect
+                  ? "correct"
+                  : "incorrect"
               }`}
             >
-              {annotation.type === "found_wrong"
+              {annotation.pending
+                ? "⏳"
+                : annotation.type === "found_wrong"
                 ? annotation.isCorrect
                   ? annotation.userChar
                   : `→${annotation.userChar}`
