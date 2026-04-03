@@ -89,28 +89,30 @@ export default function LessonSelector({ onStart }: Props) {
       .catch(() => {});
   }, []);
 
-  // Fetch lessons when derived grade_id changes
+  // Fetch lessons when derived grade_id changes (background, no full-page reload)
+  const [lessonsLoading, setLessonsLoading] = useState(false);
   useEffect(() => {
     if (!selectedGrade) return;
-    setLoading(true);
+    setLessonsLoading(true);
     fetchLessons(selectedGrade)
       .then((res) => {
+        // Sort lessons by lesson_number
+        res.lessons.sort((a, b) => a.lesson_number - b.lesson_number);
         setData(res);
         setStartLesson(1);
         setEndLesson(res.midterm_range[1]);
+        setLoading(false);
       })
-      .finally(() => setLoading(false));
+      .finally(() => setLessonsLoading(false));
   }, [selectedGrade]);
 
-  if (loading) {
+  if (loading && !data) {
     return <div className="loader">載入中...</div>;
   }
 
-  if (!data) {
-    return <div className="error">無法載入課程資料</div>;
-  }
+  const sortedLessons = data?.lessons ?? [];
 
-  const quickOptions = [
+  const quickOptions = !data ? [] : [
     {
       label: `📖 期中考範圍 (第${data.midterm_range[0]}-${data.midterm_range[1]}課)`,
       start: data.midterm_range[0],
@@ -134,7 +136,7 @@ export default function LessonSelector({ onStart }: Props) {
         <HappyKidsIllustration />
         <h1>改錯字練習神器</h1>
         <p className="subtitle">
-          {data.publisher} {data.grade} {data.semester}
+          {data ? `${data.publisher} ${data.grade} ${data.semester}` : ""}
         </p>
       </div>
 
@@ -173,6 +175,9 @@ export default function LessonSelector({ onStart }: Props) {
           </div>
         </div>
       )}
+
+      {/* Content below: dims while loading new lessons */}
+      <div className={`selector-content ${lessonsLoading ? "loading-dim" : ""}`}>
 
       {/* Practice mode selector */}
       <div className="practice-mode-selector">
@@ -223,7 +228,7 @@ export default function LessonSelector({ onStart }: Props) {
               <span className="quick-label">{opt.label}</span>
               <span className="quick-chars">
                 共{" "}
-                {data.lessons
+                {sortedLessons
                   .filter((l) => l.lesson_number >= opt.start && l.lesson_number <= opt.end)
                   .reduce((sum, l) => sum + l.character_count, 0)}{" "}
                 個生字
@@ -244,7 +249,7 @@ export default function LessonSelector({ onStart }: Props) {
                   if (v > endLesson) setEndLesson(v);
                 }}
               >
-                {data.lessons.map((l) => (
+                {sortedLessons.map((l) => (
                   <option key={l.lesson_number} value={l.lesson_number}>
                     {l.lesson_number} - {l.title}
                   </option>
@@ -258,7 +263,7 @@ export default function LessonSelector({ onStart }: Props) {
                 value={endLesson}
                 onChange={(e) => setEndLesson(Number(e.target.value))}
               >
-                {data.lessons
+                {sortedLessons
                   .filter((l) => l.lesson_number >= startLesson)
                   .map((l) => (
                     <option key={l.lesson_number} value={l.lesson_number}>
@@ -271,7 +276,7 @@ export default function LessonSelector({ onStart }: Props) {
           </div>
 
           <div className="lesson-preview">
-            {data.lessons
+            {sortedLessons
               .filter(
                 (l) =>
                   l.lesson_number >= startLesson && l.lesson_number <= endLesson
@@ -299,6 +304,8 @@ export default function LessonSelector({ onStart }: Props) {
           </button>
         </div>
       )}
+
+      </div>{/* end selector-content */}
     </div>
   );
 }

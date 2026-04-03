@@ -238,6 +238,15 @@ body::after {
   box-shadow: 0 4px 16px rgba(78, 205, 196, 0.3);
 }
 
+.selector-content {
+  transition: opacity 0.2s ease;
+}
+
+.selector-content.loading-dim {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* Practice Mode Selector */
 .practice-mode-selector {
   margin-bottom: 24px;
