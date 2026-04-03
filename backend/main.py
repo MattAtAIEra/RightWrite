@@ -316,7 +316,7 @@ def recognize_handwriting(req: RecognizeRequest):
             confidence=confidence,
         )
     except Exception as e:
-        logger.warning("Vision API failed: %s", e)
+        logger.warning("Vision API failed: %s", e, exc_info=True)
 
     # Fallback: use Gemini Vision for handwriting recognition
     try:
@@ -372,7 +372,7 @@ def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
 
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-3.1-flash-lite-preview",
+        model="gemini-2.5-flash",
         contents=[
             types.Part.from_bytes(
                 data=base64.b64decode(image_data_b64),
