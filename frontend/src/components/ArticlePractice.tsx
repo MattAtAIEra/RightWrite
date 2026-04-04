@@ -20,6 +20,7 @@ export interface AnswerResult {
   lesson: number;
   lessonTitle: string;
   type: "found_wrong" | "false_alarm" | "missed";
+  imageData?: string;
 }
 
 interface CharAnnotation {
@@ -95,6 +96,7 @@ export default function ArticlePractice({
             lesson: wrongChar.lesson,
             lessonTitle: wrongChar.lesson_title,
             type: "found_wrong",
+            imageData,
           };
           setResults((prev) => [
             ...prev.filter(
@@ -164,6 +166,7 @@ export default function ArticlePractice({
               lesson: 0,
               lessonTitle: "",
               type: "false_alarm",
+              imageData,
             };
             setResults((prev) => [...prev, result]);
           }

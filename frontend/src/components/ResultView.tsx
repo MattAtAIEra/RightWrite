@@ -1,10 +1,107 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import type { AnswerResult } from "./ArticlePractice";
 
 interface Props {
   results: AnswerResult[];
   onRetry: () => void;
   onBack: () => void;
+}
+
+/** Inline practice canvas for 訂正 — no recognition, just writing practice */
+function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClose: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const initCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    // Draw grid
+    ctx.strokeStyle = "#e0e0e0";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, rect.height / 2);
+    ctx.lineTo(rect.width, rect.height / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rect.width / 2, 0);
+    ctx.lineTo(rect.width / 2, rect.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }, []);
+
+  useEffect(() => { initCanvas(); }, [initCanvas]);
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e) {
+      const touch = e.touches[0] || e.changedTouches[0];
+      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+    }
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+  };
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const pos = getPos(e);
+    if (!pos) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    setIsDrawing(true);
+    ctx.strokeStyle = "#333333";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const pos = getPos(e);
+    if (!pos) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const endDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setIsDrawing(false);
+  };
+
+  return (
+    <div className="correction-canvas-wrapper">
+      <div className="correction-header">
+        <span className="correction-target">請寫：<strong>{correctChar}</strong></span>
+        <button className="correction-close" onClick={onClose}>完成</button>
+      </div>
+      <canvas
+        ref={canvasRef}
+        className="correction-canvas"
+        onMouseDown={startDraw}
+        onMouseMove={draw}
+        onMouseUp={endDraw}
+        onMouseLeave={endDraw}
+        onTouchStart={startDraw}
+        onTouchMove={draw}
+        onTouchEnd={endDraw}
+      />
+      <button className="correction-clear" onClick={initCanvas}>清除重寫</button>
+    </div>
+  );
 }
 
 function ConfettiCelebration() {
@@ -78,6 +175,7 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
 
 export default function ResultView({ results, onRetry, onBack }: Props) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState<string | null>(null);
 
   const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
   const falseAlarms = results.filter((r) => r.type === "false_alarm");
@@ -87,7 +185,6 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
   const denominator = totalWrong + falseAlarms.length;
   const accuracy = denominator > 0 ? Math.round((correctCount / denominator) * 100) : 0;
 
-  // Trigger confetti on perfect score
   useEffect(() => {
     if (accuracy === 100) {
       setShowConfetti(true);
@@ -138,24 +235,12 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
       <div className="accuracy-display">
         <div className="accuracy-circle">
           <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="#dfe6e9" strokeWidth="8" />
             <circle
-              cx="50"
-              cy="50"
-              r="45"
-              fill="none"
-              stroke="#dfe6e9"
-              strokeWidth="8"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="45"
-              fill="none"
-              stroke={circleColor}
-              strokeWidth="8"
+              cx="50" cy="50" r="45" fill="none"
+              stroke={circleColor} strokeWidth="8"
               strokeDasharray={`${accuracy * 2.83} ${283 - accuracy * 2.83}`}
-              strokeDashoffset="70.75"
-              strokeLinecap="round"
+              strokeDashoffset="70.75" strokeLinecap="round"
               transform="rotate(-90 50 50)"
             />
           </svg>
@@ -186,10 +271,10 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                   <small>（錯字）</small>
                 </span>
                 <span className="arrow">→</span>
-                {r.type === "found_wrong" && r.userAnswer && (
+                {r.type === "found_wrong" && r.imageData ? (
                   <>
-                    <span className={`user-answer-display ${r.isCorrect ? "correct" : "incorrect"}`}>
-                      {r.userAnswer}
+                    <span className="user-handwriting">
+                      <img src={r.imageData} alt="手寫" className="handwriting-img" />
                       <small>（你寫的）</small>
                     </span>
                     {!r.isCorrect && (
@@ -202,8 +287,7 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                       </>
                     )}
                   </>
-                )}
-                {(r.type === "missed" || !r.userAnswer) && (
+                ) : (
                   <span className="correct-display">
                     {r.correctChar}
                     <small>（正確）</small>
@@ -217,7 +301,23 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                 <span className={`status-tag ${r.isCorrect ? "pass" : "fail"}`}>
                   {getStatusLabel(r)}
                 </span>
+                {!r.isCorrect && r.type !== "missed" && (
+                  <button
+                    className="correction-btn"
+                    onClick={() => setCorrectionTarget(
+                      correctionTarget === `${i}` ? null : `${i}`
+                    )}
+                  >
+                    {correctionTarget === `${i}` ? "收起" : "訂正"}
+                  </button>
+                )}
               </div>
+              {correctionTarget === `${i}` && (
+                <CorrectionCanvas
+                  correctChar={r.correctChar}
+                  onClose={() => setCorrectionTarget(null)}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -234,10 +334,17 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
                       <small>（原本正確）</small>
                     </span>
                     <span className="arrow">→</span>
-                    <span className="wrong-display">
-                      {r.userAnswer}
-                      <small>（誤改為）</small>
-                    </span>
+                    {r.imageData ? (
+                      <span className="user-handwriting">
+                        <img src={r.imageData} alt="手寫" className="handwriting-img" />
+                        <small>（誤改為）</small>
+                      </span>
+                    ) : (
+                      <span className="wrong-display">
+                        {r.userAnswer}
+                        <small>（誤改為）</small>
+                      </span>
+                    )}
                   </div>
                   <div className="result-meta">
                     <span className={`status-tag fail`}>✗ 誤判扣分</span>
