@@ -89,9 +89,101 @@
 
 ---
 
+## Phase 3: Multi-Grade Support, Async Recognition, UI Improvements
+
+**Date**: 2026-04-04
+**Trigger**: User requested supporting all grades/publishers from downloaded Excel files, and improving handwriting recognition UX.
+
+### Completed Items
+
+1. **Excel Parser & Vocab Data Generation** (`scripts/build_vocab_json.py`)
+   - Parses 213 Excel files from `resource/` into `backend/vocab_all.json`
+   - 3570 characters across 18 grade/publisher combinations (1-6年級 x 康軒/南一/翰林)
+   - 98% have `similar_wrong` lists: 400 manually curated entries preserved, rest generated via pypinyin homophones
+   - Title extraction fixed: falls back to filename when Excel row 1 is empty
+   - Curated data saved separately in `scripts/curated_similar_wrong.json` for reproducibility
+
+2. **Backend Rewrite** (`backend/vocab_data.py`)
+   - Loads from `vocab_all.json` instead of hardcoded Python dicts (922→95 lines)
+   - Backward compatible: `grade4` → `4_kangxuan`, `grade2` → `2_hanlin` aliases
+   - Same public API: `get_grade_registry()`, `get_grade_info()`, `get_vocab_data()`, etc.
+   - `main.py` updated: `GRADE_REGISTRY` → `get_grade_registry()`
+
+3. **Async Handwriting Recognition** (`frontend/src/components/ArticlePractice.tsx`)
+   - Canvas dismisses immediately on submit — no more blocking await
+   - Pending state with ⏳ pulse animation while recognition runs in background
+   - Characters can be re-clicked to correct answers (only pending chars blocked)
+   - Recognition callbacks update annotations and results asynchronously
+
+4. **Grade/Publisher Selector Redesign** (`frontend/src/components/LessonSelector.tsx`)
+   - Split from 18-button list into two compact radio groups: publisher (3) + grade (6)
+   - No full-page reload on switch — content dims with opacity transition during AJAX fetch
+   - Lessons sorted by `lesson_number` (was unsorted)
+
+5. **Result View Enhancements** (`frontend/src/components/ResultView.tsx`)
+   - Confetti celebration (40 particles falling animation) + "恭喜全對" banner on 100% accuracy
+   - Student's handwritten image (canvas screenshot) shown instead of AI-recognized text
+   - 訂正 button for wrong answers: inline practice canvas, write/clear/rewrite, no recognition needed
+   - Result flow: 錯字 → 手寫圖 → 正確答案
+
+6. **Recognition Model Changes** (`backend/main.py:374`)
+   - `gemini-2.5-flash` → `gemini-3.1-flash-preview` (404) → `gemini-3-flash-preview` (correct)
+   - Text generation remains `gemini-3.1-flash-lite-preview`
+
+### Discoveries & Fixes
+
+- **Symptom**: `gemini-3.1-flash-preview` returns 404 NOT_FOUND
+- **Cause**: Model name does not exist. Correct ID is `gemini-3-flash-preview` (no ".1")
+- **Fix**: Listed available models via `client.models.list()` and used correct name
+- **Lesson**: **Always verify model names against `ListModels` API before deploying.** Model naming is inconsistent (3.1-flash-lite-preview exists but 3.1-flash-preview does not). Check with: `python -c "from google import genai; client = genai.Client(); [print(m.name) for m in client.models.list() if 'flash' in m.name]"`
+
+- **Symptom**: Many lesson titles empty after Excel parsing
+- **Cause**: Most Excel files have empty row 1; title is only in the filename
+- **Fix**: Parser falls back to extracting title from filename when cell A1 is empty
+
+- **Symptom**: Full page refresh when switching grade/publisher
+- **Cause**: `loading` state caused early return replacing entire component with loader
+- **Fix**: Separate `lessonsLoading` state; keep selectors always visible, dim content area only
+
+### Test Results
+
+- TypeScript: zero errors
+- Frontend build: SUCCESS
+- Backend smoke tests: 18 grades loaded, all API endpoints functional, backward compat verified
+- Cloud Build + Deploy: SUCCESS (multiple revisions)
+
+---
+
+## Phase 4: Show Handwritten Image in Results & Correction Canvas
+
+**Date**: 2026-04-04
+**Trigger**: User feedback that AI recognition doesn't always match handwriting, especially for children's writing. Teachers need to see actual handwriting to assist correction.
+
+### Completed Items
+
+1. **Handwritten Image in Results** (`frontend/src/components/ResultView.tsx`, `ArticlePractice.tsx`)
+   - Added `imageData?: string` field to `AnswerResult` interface
+   - Results display student's canvas screenshot (48x48 thumbnail) instead of recognized character
+   - Applied to both wrong-char results and false-alarm records
+
+2. **Correction Practice Canvas** (`frontend/src/components/ResultView.tsx`)
+   - 訂正 button appears next to every wrong answer (not missed)
+   - Opens inline `CorrectionCanvas` component with grid guides
+   - Students write the correct character, can clear and rewrite unlimited times
+   - No API recognition — pure writing practice for teacher-guided correction
+   - Toggle open/close with button text change (訂正/收起)
+
+### Test Results
+
+- TypeScript: zero errors
+- Frontend build: SUCCESS
+- Cloud Build + Deploy: SUCCESS
+
+---
+
 ## TODO
 
 - [ ] Enable Cloud Vision API on GCP project (currently disabled — would improve recognition as primary method)
-- [ ] Verify handwriting recognition works end-to-end on iPad after Gemini API key fix
-- [ ] Clean up duplicate files in `resource/四下-康軒版/` (has 18 files including old duplicates with "(1)" suffix)
-- [ ] Parse downloaded Excel files to extend `vocab_data.py` for other grades/publishers
+- [ ] Investigate `gemini-3-flash-preview` recognition quality for children's handwriting
+- [x] ~~Parse downloaded Excel files to extend `vocab_data.py` for other grades/publishers~~
+- [x] ~~Clean up duplicate files in `resource/四下-康軒版/`~~
