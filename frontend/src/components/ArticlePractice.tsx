@@ -258,9 +258,28 @@ export default function ArticlePractice({
 
   const answeredCount = [...annotations.values()].filter((a) => !a.pending).length;
 
-  // Render zhuyin as plain text inside <rt> — let native ruby handle layout
-  // (splitting tone into an absolutely positioned span got clipped on iOS)
-  const renderZhuyinRt = (zy: string) => <rt className="zy-rt">{zy}</rt>;
+  // Split zhuyin into body + side-tone, following the rules in
+  // memory/project_zhuyin_rules.md:
+  //   - 二聲 ˊ / 三聲 ˇ / 四聲 ˋ → render the tone as a SIBLING of <ruby>
+  //     (positioned absolutely on the right of the column). Putting position
+  //     absolute INSIDE <rt> gets clipped on iOS — don't do that.
+  //   - 輕聲 ˙ → prepend to the body so native vertical-rl ruby renders it
+  //     at the TOP of the bopomofo column.
+  //   - 一聲 / no mark → render the body as-is.
+  const SIDE_TONES = "ˊˇˋ";
+  const NEUTRAL_TONE = "˙";
+  const splitZhuyin = (zy: string): { body: string; sideTone: string } => {
+    if (!zy) return { body: "", sideTone: "" };
+    const last = zy[zy.length - 1];
+    if (SIDE_TONES.includes(last)) {
+      return { body: zy.slice(0, -1), sideTone: last };
+    }
+    if (last === NEUTRAL_TONE) {
+      // Move 輕聲 to the top of the column
+      return { body: NEUTRAL_TONE + zy.slice(0, -1), sideTone: "" };
+    }
+    return { body: zy, sideTone: "" };
+  };
 
   // Render the article text character by character
   const renderArticle = () => {
@@ -312,17 +331,21 @@ export default function ArticlePractice({
 
       const zhuyinStr = showZhuyin ? (article.zhuyin?.[index] || "") : "";
       const isChineseChar = /[\u4e00-\u9fff]/.test(char);
+      const { body: zyBody, sideTone: zySideTone } = splitZhuyin(zhuyinStr);
 
       elements.push(
-        <span key={index} className="char-wrapper">
+        <span key={index} className={`char-wrapper${zhuyinStr ? " has-zhuyin" : ""}`}>
           {showZhuyin && isChineseChar && zhuyinStr ? (
-            <ruby
-              className={charClass}
-              onClick={() => !isPunctuation && handleCharClick(index, char)}
-            >
-              {char}
-              {renderZhuyinRt(zhuyinStr)}
-            </ruby>
+            <>
+              <ruby
+                className={charClass}
+                onClick={() => !isPunctuation && handleCharClick(index, char)}
+              >
+                {char}
+                <rt className="zy-rt">{zyBody}</rt>
+              </ruby>
+              {zySideTone && <span className="zy-side-tone">{zySideTone}</span>}
+            </>
           ) : (
             <span
               className={charClass}

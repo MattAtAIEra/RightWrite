@@ -659,6 +659,12 @@ body::after {
   display: inline;
 }
 
+/* When zhuyin is shown, switch to inline-block so the side-tone span can
+   be absolutely positioned relative to the wrapper without being clipped. */
+.char-wrapper.has-zhuyin {
+  display: inline-block;
+}
+
 .article-char {
   cursor: pointer;
   padding: 2px 1px;
@@ -780,9 +786,27 @@ body::after {
   user-select: none;
 }
 
-/* Zhuyin rt — keep native ruby behavior so it stays beside the char */
+/* Zhuyin rt — keep native ruby behavior so it stays beside the char.
+   DO NOT override its display, that breaks ruby and the column falls below. */
 .zy-rt {
-  /* no display override — must remain a ruby annotation element */
+  /* intentionally empty */
+}
+
+/* Side tone (二聲ˊ / 三聲ˇ / 四聲ˋ) — sits visually to the right of the
+   bopomofo column. Rendered as a sibling of <ruby>, NOT inside <rt>, because
+   absolutely positioned descendants of <rt> get clipped on iOS Safari/Chrome.
+   The positioning context is .char-wrapper.has-zhuyin (inline-block + relative). */
+.zy-side-tone {
+  position: absolute;
+  top: 0.05em;
+  right: -0.5em;
+  font-size: 0.55em;
+  line-height: 1;
+  color: var(--text-light);
+  user-select: none;
+  pointer-events: none;
+  font-weight: 700;
+  z-index: 1;
 }
 
 .practice-footer {
