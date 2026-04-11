@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { AnswerResult } from "./ArticlePractice";
+import { recognizeHandwriting } from "../api";
 
 interface Props {
   results: AnswerResult[];
@@ -7,10 +8,13 @@ interface Props {
   onBack: () => void;
 }
 
-/** Inline practice canvas for 訂正 — no recognition, just writing practice */
+/** Inline practice canvas for 訂正 — write the correct char, then validate via recognition API */
 function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<null | { correct: boolean; recognized: string }>(null);
 
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -58,6 +62,8 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     setIsDrawing(true);
+    setHasDrawn(true);
+    setVerifyResult(null);
     ctx.strokeStyle = "#333333";
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
@@ -82,12 +88,34 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
     setIsDrawing(false);
   };
 
+  const handleClear = () => {
+    initCanvas();
+    setHasDrawn(false);
+    setVerifyResult(null);
+  };
+
+  const handleVerify = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || verifying) return;
+    setVerifying(true);
+    try {
+      const imageData = canvas.toDataURL("image/png");
+      const res = await recognizeHandwriting(imageData, correctChar);
+      setVerifyResult({ correct: res.is_correct, recognized: res.recognized_char });
+    } catch (err) {
+      setVerifyResult({ correct: false, recognized: "?" });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
     <div className="correction-canvas-wrapper">
       <div className="correction-header">
         <span className="correction-target">請寫：<strong>{correctChar}</strong></span>
-        <button className="correction-close" onClick={onClose}>完成</button>
+        <button className="correction-close" onClick={onClose}>關閉</button>
       </div>
+      <p className="correction-tip">✏️ 請用工整的筆順來書寫，不要潦草，影響判斷</p>
       <canvas
         ref={canvasRef}
         className="correction-canvas"
@@ -99,7 +127,23 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
         onTouchMove={draw}
         onTouchEnd={endDraw}
       />
-      <button className="correction-clear" onClick={initCanvas}>清除重寫</button>
+      <div className="correction-actions">
+        <button className="correction-clear" onClick={handleClear}>清除重寫</button>
+        <button
+          className="correction-verify"
+          onClick={handleVerify}
+          disabled={!hasDrawn || verifying}
+        >
+          {verifying ? "判斷中…" : "驗證 ✓"}
+        </button>
+      </div>
+      {verifyResult && (
+        <div className={`correction-feedback ${verifyResult.correct ? "ok" : "no"}`}>
+          {verifyResult.correct
+            ? "🎉 太棒了，寫對了！"
+            : "再試一次！記得工整書寫喔～"}
+        </div>
+      )}
     </div>
   );
 }

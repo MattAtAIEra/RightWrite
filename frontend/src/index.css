@@ -764,6 +764,7 @@ body::after {
 
 .article-display.with-zhuyin {
   line-height: 2.8;
+  font-size: 1.95rem;
 }
 
 .article-display ruby {
@@ -772,28 +773,16 @@ body::after {
 }
 
 .article-display rt {
-  font-size: 0.38em;
+  font-size: 0.42em;
   font-weight: 400;
   color: var(--text-light);
   letter-spacing: 0;
   user-select: none;
 }
 
-/* Tone mark positioning for vertical zhuyin */
+/* Zhuyin rt — keep native ruby behavior so it stays beside the char */
 .zy-rt {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0;
-}
-
-.zy-body {
-  display: inline;
-}
-
-.zy-tone {
-  display: inline;
-  font-size: 0.85em;
-  line-height: 1;
+  /* no display override — must remain a ruby annotation element */
 }
 
 .practice-footer {
@@ -1246,15 +1235,72 @@ body::after {
   cursor: crosshair;
 }
 
+.correction-tip {
+  margin: 4px 0 10px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  font-family: "LXGW WenKai TC", sans-serif;
+}
+
+.correction-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .correction-clear {
-  margin-top: 6px;
-  padding: 3px 10px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: white;
   color: var(--text-light);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   cursor: pointer;
+}
+
+.correction-verify {
+  padding: 6px 18px;
+  border: 2px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: white;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.2s;
+}
+
+.correction-verify:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.correction-verify:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.correction-feedback {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-align: center;
+  font-family: "ZCOOL KuaiLe", sans-serif;
+  font-size: 1rem;
+  animation: slideUp 0.3s ease-out;
+}
+
+.correction-feedback.ok {
+  background: rgba(81, 207, 102, 0.15);
+  color: #2b8a3e;
+  border: 2px solid rgba(81, 207, 102, 0.45);
+}
+
+.correction-feedback.no {
+  background: rgba(255, 107, 107, 0.12);
+  color: #c92a2a;
+  border: 2px solid rgba(255, 107, 107, 0.4);
 }
 
 .result-meta {
@@ -1404,9 +1450,10 @@ body::after {
 
   .article-display.with-zhuyin {
     line-height: 2.6;
+    font-size: 1.65rem;
   }
 
   .article-display rt {
-    font-size: 0.35em;
+    font-size: 0.4em;
   }
 }
