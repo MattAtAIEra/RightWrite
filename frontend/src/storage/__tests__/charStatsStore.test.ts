@@ -129,7 +129,7 @@ describe("charStatsStore queries", () => {
     expect(list.map((s) => s.char)).toEqual(["縫"]);
   });
 
-  it("listTopMistakes returns mistakeRate DESC limited to N", async () => {
+  it("listTopMistakes returns mistakeRate DESC, excludes chars with no mistakes", async () => {
     // 縫 1/2 = 0.5
     await applyEvent({ profileId: PROFILE, gradeId: GRADE, timestamp: 1,
       event: ev({ type: "found_wrong", correctChar: "縫", isCorrect: true }) });
@@ -138,11 +138,11 @@ describe("charStatsStore queries", () => {
     // 駿 1/1 = 1.0
     await applyEvent({ profileId: PROFILE, gradeId: GRADE, timestamp: 3,
       event: ev({ type: "missed", correctChar: "駿" }) });
-    // 雜 0/1 = 0
+    // 雜 0/1 = 0 — practiced once, all correct → should NOT appear in top mistakes
     await applyEvent({ profileId: PROFILE, gradeId: GRADE, timestamp: 4,
       event: ev({ type: "found_wrong", correctChar: "雜", isCorrect: true }) });
 
     const top = await listTopMistakes(PROFILE, 10);
-    expect(top.map((s) => s.char)).toEqual(["駿", "縫", "雜"]);
+    expect(top.map((s) => s.char)).toEqual(["駿", "縫"]);
   });
 });

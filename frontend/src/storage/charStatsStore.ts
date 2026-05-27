@@ -77,6 +77,7 @@ export async function listByProfile(profileId: string): Promise<CharStat[]> {
 export async function listTopMistakes(profileId: string, n: number): Promise<CharStat[]> {
   const all = await listByProfile(profileId);
   return all
+    .filter((s) => s.mistakes > 0)
     .sort((a, b) => b.mistakeRate - a.mistakeRate || b.mistakes - a.mistakes)
     .slice(0, n);
 }
