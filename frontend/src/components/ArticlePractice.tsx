@@ -19,6 +19,8 @@ export interface AnswerResult {
   isCorrect: boolean;
   lesson: number;
   lessonTitle: string;
+  word: string;
+  gradeId: string;
   type: "found_wrong" | "false_alarm" | "missed";
   imageData?: string;
 }
@@ -95,6 +97,8 @@ export default function ArticlePractice({
             isCorrect: response.is_correct,
             lesson: wrongChar.lesson,
             lessonTitle: wrongChar.lesson_title,
+            word: wrongChar.word,
+            gradeId,
             type: "found_wrong",
             imageData,
           };
@@ -165,6 +169,8 @@ export default function ArticlePractice({
               isCorrect: false,
               lesson: 0,
               lessonTitle: "",
+              word: "",
+              gradeId,
               type: "false_alarm",
               imageData,
             };
@@ -249,6 +255,8 @@ export default function ArticlePractice({
           isCorrect: false,
           lesson: wc.lesson,
           lessonTitle: wc.lesson_title,
+          word: wc.word,
+          gradeId,
           type: "missed",
         });
       }

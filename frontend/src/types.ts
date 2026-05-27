@@ -32,6 +32,7 @@ export interface WrongChar {
   correct_char: string;
   lesson: number;
   lesson_title: string;
+  word: string;
 }
 
 export interface ArticleResponse {
