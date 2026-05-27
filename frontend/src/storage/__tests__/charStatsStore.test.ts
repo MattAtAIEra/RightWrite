@@ -117,6 +117,21 @@ describe("charStatsStore.applyEvent", () => {
     const s = await getStat(PROFILE, GRADE, "縫");
     expect(s).toMatchObject({ lesson: 5, lessonTitle: "L5", word: "裁縫" });
   });
+
+  it("false_alarm preserves existing lesson/word when event has empty meta", async () => {
+    // Seed with a real lesson via found_wrong
+    await applyEvent({
+      profileId: PROFILE, gradeId: GRADE, timestamp: 1,
+      event: ev({ type: "found_wrong", correctChar: "縫", isCorrect: false, lesson: 3, lessonTitle: "L3", word: "縫補" }),
+    });
+    // false_alarm with empty meta should not wipe lesson/word
+    await applyEvent({
+      profileId: PROFILE, gradeId: GRADE, timestamp: 2,
+      event: ev({ type: "false_alarm", correctChar: "縫", lesson: 0, lessonTitle: "", word: "" }),
+    });
+    const s = await getStat(PROFILE, GRADE, "縫");
+    expect(s).toMatchObject({ attempts: 2, mistakes: 2, lesson: 3, lessonTitle: "L3", word: "縫補" });
+  });
 });
 
 describe("charStatsStore queries", () => {

@@ -22,9 +22,9 @@ export async function applyEvent(input: ApplyEventInput): Promise<CharStat> {
     profileId,
     gradeId,
     char,
-    lesson: event.lesson,
-    lessonTitle: event.lessonTitle,
-    word: event.word,
+    lesson: event.lesson || 0,
+    lessonTitle: event.lessonTitle || "",
+    word: event.word || "",
     attempts: 0,
     mistakes: 0,
     lastSeenAt: timestamp,
@@ -40,11 +40,13 @@ export async function applyEvent(input: ApplyEventInput): Promise<CharStat> {
   const recentSuccessStreak = isSuccess ? base.recentSuccessStreak + 1 : 0;
   const lastMistakeAt = isSuccess ? base.lastMistakeAt : timestamp;
 
+  const hasFreshMeta = event.word !== "" && event.lesson > 0;
+
   const next: CharStat = {
     ...base,
-    lesson: event.lesson,
-    lessonTitle: event.lessonTitle,
-    word: event.word,
+    lesson: hasFreshMeta ? event.lesson : base.lesson,
+    lessonTitle: hasFreshMeta ? event.lessonTitle : base.lessonTitle,
+    word: hasFreshMeta ? event.word : base.word,
     attempts,
     mistakes,
     lastSeenAt: timestamp,
