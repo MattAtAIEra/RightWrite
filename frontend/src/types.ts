@@ -49,5 +49,5 @@ export interface RecognizeResponse {
   confidence: number;
 }
 
-export type AppStage = "select" | "practice" | "result";
+export type AppStage = "select" | "practice" | "result" | "dashboard";
 export type PracticeMode = "sentence" | "article";

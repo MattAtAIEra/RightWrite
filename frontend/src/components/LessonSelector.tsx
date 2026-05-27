@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import type { LessonsResponse, PracticeMode, GradeOption } from "../types";
 import { fetchLessons, fetchGrades } from "../api";
+import { usePersonalization } from "../personalization/PersonalizationContext";
+import ProfilePicker from "../personalization/ProfilePicker";
 
 interface Props {
   onStart: (start: number, end: number, mode: PracticeMode, gradeId: string) => void;
+  onOpenDashboard: () => void;
 }
 
 function HappyKidsIllustration() {
@@ -65,7 +68,9 @@ function HappyKidsIllustration() {
 const PUBLISHERS = ["康軒版", "南一版", "翰林版"];
 const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
 
-export default function LessonSelector({ onStart }: Props) {
+export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
+  const personalization = usePersonalization();
+  const [showSettings, setShowSettings] = useState(false);
   const [grades, setGrades] = useState<GradeOption[]>([]);
   const [selectedPublisher, setSelectedPublisher] = useState("康軒版");
   const [selectedGradeNum, setSelectedGradeNum] = useState(4);
@@ -130,11 +135,53 @@ export default function LessonSelector({ onStart }: Props) {
     },
   ];
 
+  const startDisabled = personalization.enabled && !personalization.activeProfile;
+
   return (
     <div className="selector-container">
+      {/* NEW: settings bar */}
+      <div className="settings-bar">
+        <h1 className="app-title">RightWrite 改錯字練習</h1>
+        <div className="settings-bar-right">
+          {personalization.enabled && personalization.activeProfile && (
+            <button className="dashboard-btn" onClick={onOpenDashboard}>
+              📊 報表
+            </button>
+          )}
+          <button className="settings-btn" onClick={() => setShowSettings((v) => !v)} aria-label="設定">
+            ⚙️
+          </button>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="settings-dropdown">
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={personalization.enabled}
+              onChange={(e) => personalization.setEnabled(e.target.checked)}
+            />
+            <span>個人化記錄</span>
+          </label>
+          <p className="settings-hint">
+            開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
+          </p>
+        </div>
+      )}
+
+      {personalization.enabled && (
+        <ProfilePicker />
+      )}
+
+      {personalization.enabled && !personalization.activeProfile && (
+        <div className="profile-required-banner">
+          👆 請先選擇或新增一位小朋友再開始練習
+        </div>
+      )}
+
       <div className="selector-header">
         <HappyKidsIllustration />
-        <h1>改錯字練習神器</h1>
         <p className="subtitle">
           {data ? `${data.publisher} ${data.grade} ${data.semester}` : ""}
         </p>
@@ -223,6 +270,7 @@ export default function LessonSelector({ onStart }: Props) {
             <button
               key={opt.label}
               className="quick-btn"
+              disabled={startDisabled}
               onClick={() => onStart(opt.start, opt.end, practiceMode, selectedGrade)}
             >
               <span className="quick-label">{opt.label}</span>
@@ -299,6 +347,7 @@ export default function LessonSelector({ onStart }: Props) {
           <button
             className="start-btn"
             onClick={() => onStart(startLesson, endLesson, practiceMode, selectedGrade)}
+            disabled={startDisabled}
           >
             開始練習！
           </button>
