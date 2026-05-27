@@ -11,13 +11,15 @@ function App() {
   const [lessonRange, setLessonRange] = useState<[number, number]>([1, 6]);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("article");
   const [gradeId, setGradeId] = useState("grade4");
+  const [gradeLabel, setGradeLabel] = useState("");
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [practiceKey, setPracticeKey] = useState(0);
 
-  const handleStart = (start: number, end: number, mode: PracticeMode, grade: string) => {
+  const handleStart = (start: number, end: number, mode: PracticeMode, grade: string, label: string) => {
     setLessonRange([start, end]);
     setPracticeMode(mode);
     setGradeId(grade);
+    setGradeLabel(label);
     setPracticeKey((k) => k + 1);
     setStage("practice");
   };
@@ -50,6 +52,7 @@ function App() {
             endLesson={lessonRange[1]}
             practiceMode={practiceMode}
             gradeId={gradeId}
+            gradeLabel={gradeLabel}
             onFinish={handleFinish}
             onBack={handleBack}
           />

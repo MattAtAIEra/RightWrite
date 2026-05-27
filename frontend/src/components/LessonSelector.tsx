@@ -5,7 +5,7 @@ import { usePersonalization } from "../personalization/PersonalizationContext";
 import ProfilePicker from "../personalization/ProfilePicker";
 
 interface Props {
-  onStart: (start: number, end: number, mode: PracticeMode, gradeId: string) => void;
+  onStart: (start: number, end: number, mode: PracticeMode, grade: string, gradeLabel: string) => void;
   onOpenDashboard: () => void;
 }
 
@@ -271,7 +271,10 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
               key={opt.label}
               className="quick-btn"
               disabled={startDisabled}
-              onClick={() => onStart(opt.start, opt.end, practiceMode, selectedGrade)}
+              onClick={() => {
+                const selectedGradeLabel = grades.find((g) => g.id === selectedGrade)?.label ?? selectedGrade;
+                onStart(opt.start, opt.end, practiceMode, selectedGrade, selectedGradeLabel);
+              }}
             >
               <span className="quick-label">{opt.label}</span>
               <span className="quick-chars">
@@ -346,7 +349,10 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
 
           <button
             className="start-btn"
-            onClick={() => onStart(startLesson, endLesson, practiceMode, selectedGrade)}
+            onClick={() => {
+              const selectedGradeLabel = grades.find((g) => g.id === selectedGrade)?.label ?? selectedGrade;
+              onStart(startLesson, endLesson, practiceMode, selectedGrade, selectedGradeLabel);
+            }}
             disabled={startDisabled}
           >
             開始練習！

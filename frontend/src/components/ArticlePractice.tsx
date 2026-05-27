@@ -2,12 +2,16 @@ import { useEffect, useState, useCallback } from "react";
 import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
+import { usePersonalization } from "../personalization/PersonalizationContext";
+import { recordSession } from "../storage/sessionStore";
+import type { PracticeEvent } from "../storage/types";
 
 interface Props {
   startLesson: number;
   endLesson: number;
   practiceMode: PracticeMode;
   gradeId: string;
+  gradeLabel: string;
   onFinish: (results: AnswerResult[]) => void;
   onBack: () => void;
 }
@@ -41,9 +45,12 @@ export default function ArticlePractice({
   endLesson,
   practiceMode,
   gradeId,
+  gradeLabel,
   onFinish,
   onBack,
 }: Props) {
+  const personalization = usePersonalization();
+  const [startedAt] = useState(() => Date.now());
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCharIndex, setSelectedCharIndex] = useState<number | null>(null);
@@ -240,12 +247,12 @@ export default function ArticlePractice({
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const allResults = [...results];
     // Mark unfound wrong chars as missed
     for (const wc of article.wrong_chars) {
       const found = allResults.find(
-        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char
+        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char,
       );
       if (!found) {
         allResults.push({
@@ -261,6 +268,37 @@ export default function ArticlePractice({
         });
       }
     }
+
+    // Persist if personalization is on and a profile is active
+    if (personalization.enabled && personalization.activeProfile) {
+      const events: PracticeEvent[] = allResults.map((r) => ({
+        type: r.type,
+        wrongChar: r.wrongChar,
+        correctChar: r.correctChar,
+        userAnswer: r.userAnswer,
+        isCorrect: r.isCorrect,
+        lesson: r.lesson,
+        lessonTitle: r.lessonTitle,
+        word: r.word,
+        imageData: r.imageData,
+      }));
+      try {
+        await recordSession({
+          profileId: personalization.activeProfile.id,
+          gradeId,
+          gradeLabel,
+          startLesson,
+          endLesson,
+          mode: practiceMode,
+          startedAt,
+          finishedAt: Date.now(),
+          events,
+        });
+      } catch (err) {
+        console.error("Failed to record session", err);
+      }
+    }
+
     onFinish(allResults);
   };
 
