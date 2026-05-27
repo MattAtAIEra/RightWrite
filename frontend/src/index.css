@@ -1481,3 +1481,133 @@ body::after {
     font-size: 0.4em;
   }
 }
+
+/* ===== Profile Picker ===== */
+.profile-picker {
+  margin: 12px 0;
+}
+.profile-picker-cards {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.profile-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--cream, #fff8ec);
+  border: 2px solid transparent;
+  border-radius: 24px;
+  font-size: 16px;
+  cursor: pointer;
+  position: relative;
+  font-family: inherit;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.profile-card.active {
+  border-color: var(--coral, #ff6b6b);
+  transform: scale(1.05);
+}
+.profile-card:hover {
+  transform: scale(1.05);
+}
+.profile-emoji {
+  font-size: 20px;
+}
+.profile-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.1);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.profile-delete:hover {
+  background: var(--coral, #ff6b6b);
+  color: white;
+}
+.profile-add-btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 2px dashed #bbb;
+  border-radius: 24px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.profile-add-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.profile-add-modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  min-width: 320px;
+  max-width: 90vw;
+}
+.profile-add-modal-content label {
+  display: block;
+  margin: 12px 0 4px;
+  font-weight: 600;
+}
+.profile-add-modal-content input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: inherit;
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.emoji-option {
+  font-size: 24px;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+}
+.emoji-option.selected {
+  border-color: var(--coral, #ff6b6b);
+  background: var(--cream, #fff8ec);
+}
+.profile-add-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.profile-add-actions button {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-family: inherit;
+}
+.profile-add-actions button.primary {
+  background: var(--coral, #ff6b6b);
+  color: white;
+  border-color: var(--coral, #ff6b6b);
+}
+.profile-add-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
