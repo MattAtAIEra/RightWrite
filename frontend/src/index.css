@@ -1718,6 +1718,11 @@ body::after {
   border-radius: 6px;
   font-family: inherit;
 }
+.trend-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .empty-hint {
   text-align: center;
   color: #999;
