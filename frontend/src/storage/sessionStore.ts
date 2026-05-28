@@ -2,6 +2,7 @@
 import { getDB } from "./db";
 import { applyEvent } from "./charStatsStore";
 import { putImage } from "./imageStore";
+import { isSkippingImages } from "./skipImagesFlag";
 import type { Session, PracticeEvent, SessionSummary } from "./types";
 
 export interface RecordSessionInput {
@@ -66,7 +67,7 @@ export async function recordSession(input: RecordSessionInput): Promise<Session>
       timestamp: input.finishedAt,
       event: e,
     });
-    if (e.imageData) {
+    if (e.imageData && !isSkippingImages()) {
       await putImage({
         profileId: input.profileId,
         sessionId: id,

@@ -47,3 +47,11 @@ export async function deleteByProfile(profileId: string): Promise<void> {
   }
   await tx.done;
 }
+
+export const TTL_DAYS = 120;  // 4 months
+const DAY_MS = 86400_000;
+
+export async function purgeOlderThanFourMonths(now: number = Date.now()): Promise<number> {
+  const cutoff = now - TTL_DAYS * DAY_MS;
+  return purgeBefore(cutoff);
+}

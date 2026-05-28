@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AppStage, PracticeMode } from "./types";
 import type { AnswerResult } from "./components/ArticlePractice";
 import LessonSelector from "./components/LessonSelector";
@@ -6,9 +6,14 @@ import ArticlePractice from "./components/ArticlePractice";
 import ResultView from "./components/ResultView";
 import { PersonalizationProvider } from "./personalization/PersonalizationContext";
 import Dashboard from "./dashboard/Dashboard";
+import { purgeOlderThanFourMonths } from "./storage/imageStore";
 
 function App() {
   const [stage, setStage] = useState<AppStage>("select");
+
+  useEffect(() => {
+    purgeOlderThanFourMonths().catch((err) => console.warn("TTL purge failed", err));
+  }, []);
   const [lessonRange, setLessonRange] = useState<[number, number]>([1, 6]);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("article");
   const [gradeId, setGradeId] = useState("grade4");

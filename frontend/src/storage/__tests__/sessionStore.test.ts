@@ -4,6 +4,7 @@ import { DB_NAME, closeDB } from "../db";
 import { recordSession, listByProfile, listByGradeLesson } from "../sessionStore";
 import { getStat } from "../charStatsStore";
 import { listByProfile as listImagesByProfile } from "../imageStore";
+import { setSkippingImages } from "../skipImagesFlag";
 import type { PracticeEvent } from "../types";
 
 beforeEach(async () => {
@@ -83,5 +84,21 @@ describe("recordSession", () => {
     ]);
     expect(groups[0].sessions).toHaveLength(2);
     expect(groups[1].sessions).toHaveLength(1);
+  });
+});
+
+describe("recordSession respects skip-images flag", () => {
+  it("does NOT persist images when flag is on, but still persists session + charStats", async () => {
+    setSkippingImages(true);
+    try {
+      const events: PracticeEvent[] = [
+        ev({ type: "found_wrong", correctChar: "縫", isCorrect: false, imageData: "data:img1" }),
+      ];
+      await recordSession({ ...baseSession, events });
+      expect((await listImagesByProfile("p1")).length).toBe(0);
+      expect((await getStat("p1", "4_kangxuan", "縫"))!.attempts).toBe(1);
+    } finally {
+      setSkippingImages(false);
+    }
   });
 });
