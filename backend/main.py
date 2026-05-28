@@ -5,10 +5,12 @@ Backend API server
 import base64
 import json
 import logging
+import math
 import os
 import random
 import re
 from pathlib import Path
+from typing import Sequence, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,31 @@ from vocab_data import (
     get_all_characters_in_range,
     get_all_compounds_in_range,
 )
+
+
+T = TypeVar("T")
+
+
+def _weighted_sample_without_replacement(
+    population: Sequence[T], weights: Sequence[float], k: int
+) -> list[T]:
+    """Sample k items from population without replacement, weighted.
+
+    Uses Efraimidis-Spirakis algorithm: each item gets key = random()**(1/weight),
+    take top-k by key. Items with weight <= 0 are excluded.
+    """
+    if len(population) != len(weights):
+        raise ValueError("population and weights must have the same length")
+    if k <= 0 or not population:
+        return []
+    pairs = [
+        (random.random() ** (1.0 / w) if w > 0 else -math.inf, item)
+        for item, w in zip(population, weights)
+    ]
+    pairs.sort(key=lambda p: p[0], reverse=True)
+    # Drop -inf entries (weight 0) so they're never selected
+    filtered = [item for key, item in pairs if key != -math.inf]
+    return filtered[:k]
 
 
 app = FastAPI(title="RightWrite API", version="1.0.0")
@@ -47,6 +74,7 @@ class GenerateArticleRequest(BaseModel):
     end_lesson: int
     mode: str = "article"  # "sentence" or "article"
     grade_id: str = "grade4"
+    weighted_chars: dict[str, float] | None = None  # NEW
 
 
 class GenerateArticleResponse(BaseModel):
@@ -143,7 +171,13 @@ def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
     return lines[:len(words)]
 
 
-def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article", grade_id: str = "grade4") -> dict:
+def generate_article_with_errors(
+    start_lesson: int,
+    end_lesson: int,
+    mode: str = "article",
+    grade_id: str = "grade4",
+    weighted_chars: dict[str, float] | None = None,
+) -> dict:
     """
     Generate content with wrong characters from the selected lessons.
     Uses compound words (詞語) as the unit — each wrong character always
@@ -170,7 +204,17 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
     else:
         num_wrong = min(random.randint(5, 8), len(usable))
 
-    selected = random.sample(usable, num_wrong)
+    if weighted_chars:
+        item_weights = [
+            max(
+                (weighted_chars.get(ch, 1.0) for _, ch in comp["_swappable"]),
+                default=1.0,
+            )
+            for comp in usable
+        ]
+        selected = _weighted_sample_without_replacement(usable, item_weights, num_wrong)
+    else:
+        selected = random.sample(usable, num_wrong)
     words = [comp["word"] for comp in selected]
 
     # Generate sentences with Gemini
@@ -293,7 +337,9 @@ def generate_article(req: GenerateArticleRequest):
     if req.start_lesson > req.end_lesson:
         raise HTTPException(status_code=400, detail="Start lesson must be <= end lesson")
 
-    result = generate_article_with_errors(req.start_lesson, req.end_lesson, req.mode, req.grade_id)
+    result = generate_article_with_errors(
+        req.start_lesson, req.end_lesson, req.mode, req.grade_id, req.weighted_chars,
+    )
     return result
 
 
