@@ -4,6 +4,8 @@ import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
 import { usePersonalization } from "../personalization/PersonalizationContext";
 import { recordSession } from "../storage/sessionStore";
+import { listByProfile as listCharStats } from "../storage/charStatsStore";
+import { buildWeightedChars } from "../personalization/weights";
 import type { PracticeEvent } from "../storage/types";
 
 interface Props {
@@ -66,11 +68,25 @@ export default function ArticlePractice({
 
   useEffect(() => {
     setLoading(true);
-    generateArticle(startLesson, endLesson, practiceMode, gradeId)
-      .then(setArticle)
-      .catch(() => alert("生成文章失敗，請重試"))
-      .finally(() => setLoading(false));
-  }, [startLesson, endLesson, practiceMode]);
+    (async () => {
+      let weightedChars: Record<string, number> | undefined;
+      if (personalization.enabled && personalization.activeProfile) {
+        const stats = await listCharStats(personalization.activeProfile.id);
+        // Only weight chars from the current grade — different grades have independent vocab
+        const gradeStats = stats.filter((s) => s.gradeId === gradeId);
+        const built = buildWeightedChars(gradeStats);
+        if (Object.keys(built).length > 0) weightedChars = built;
+      }
+      try {
+        const article = await generateArticle(startLesson, endLesson, practiceMode, gradeId, weightedChars);
+        setArticle(article);
+      } catch {
+        alert("生成文章失敗，請重試");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [startLesson, endLesson, practiceMode, gradeId, personalization.enabled, personalization.activeProfile]);
 
   // Fire-and-forget recognition for a wrong character
   const recognizeWrongChar = useCallback(
