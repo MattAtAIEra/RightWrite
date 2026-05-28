@@ -18,12 +18,22 @@ export async function generateArticle(
   startLesson: number,
   endLesson: number,
   mode: string = "article",
-  gradeId: string = "grade4"
+  gradeId: string = "grade4",
+  weightedChars?: Record<string, number>,
 ): Promise<ArticleResponse> {
+  const body: Record<string, unknown> = {
+    start_lesson: startLesson,
+    end_lesson: endLesson,
+    mode,
+    grade_id: gradeId,
+  };
+  if (weightedChars && Object.keys(weightedChars).length > 0) {
+    body.weighted_chars = weightedChars;
+  }
   const res = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ start_lesson: startLesson, end_lesson: endLesson, mode, grade_id: gradeId }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to generate article");
   return res.json();

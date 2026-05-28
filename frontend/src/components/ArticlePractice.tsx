@@ -2,12 +2,19 @@ import { useEffect, useState, useCallback } from "react";
 import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
+import { usePersonalization } from "../personalization/PersonalizationContext";
+import { recordSession } from "../storage/sessionStore";
+import { listByProfile as listCharStats } from "../storage/charStatsStore";
+import { buildWeightedChars } from "../personalization/weights";
+import type { PracticeEvent } from "../storage/types";
+import QuotaModal from "../personalization/QuotaModal";
 
 interface Props {
   startLesson: number;
   endLesson: number;
   practiceMode: PracticeMode;
   gradeId: string;
+  gradeLabel: string;
   onFinish: (results: AnswerResult[]) => void;
   onBack: () => void;
 }
@@ -19,6 +26,8 @@ export interface AnswerResult {
   isCorrect: boolean;
   lesson: number;
   lessonTitle: string;
+  word: string;
+  gradeId: string;
   type: "found_wrong" | "false_alarm" | "missed";
   imageData?: string;
 }
@@ -39,9 +48,12 @@ export default function ArticlePractice({
   endLesson,
   practiceMode,
   gradeId,
+  gradeLabel,
   onFinish,
   onBack,
 }: Props) {
+  const personalization = usePersonalization();
+  const [startedAt] = useState(() => Date.now());
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCharIndex, setSelectedCharIndex] = useState<number | null>(null);
@@ -54,14 +66,30 @@ export default function ArticlePractice({
   } | null>(null);
   const [showZhuyin, setShowZhuyin] = useState(false);
   const [results, setResults] = useState<AnswerResult[]>([]);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    generateArticle(startLesson, endLesson, practiceMode, gradeId)
-      .then(setArticle)
-      .catch(() => alert("生成文章失敗，請重試"))
-      .finally(() => setLoading(false));
-  }, [startLesson, endLesson, practiceMode]);
+    (async () => {
+      let weightedChars: Record<string, number> | undefined;
+      if (personalization.enabled && personalization.activeProfile) {
+        const stats = await listCharStats(personalization.activeProfile.id);
+        // Only weight chars from the current grade — different grades have independent vocab
+        const gradeStats = stats.filter((s) => s.gradeId === gradeId);
+        const built = buildWeightedChars(gradeStats);
+        if (Object.keys(built).length > 0) weightedChars = built;
+      }
+      try {
+        const article = await generateArticle(startLesson, endLesson, practiceMode, gradeId, weightedChars);
+        setArticle(article);
+      } catch {
+        alert("生成文章失敗，請重試");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [startLesson, endLesson, practiceMode, gradeId, personalization.enabled, personalization.activeProfile]);
 
   // Fire-and-forget recognition for a wrong character
   const recognizeWrongChar = useCallback(
@@ -95,6 +123,8 @@ export default function ArticlePractice({
             isCorrect: response.is_correct,
             lesson: wrongChar.lesson,
             lessonTitle: wrongChar.lesson_title,
+            word: wrongChar.word,
+            gradeId,
             type: "found_wrong",
             imageData,
           };
@@ -121,7 +151,7 @@ export default function ArticlePractice({
           setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
         });
     },
-    []
+    [gradeId]
   );
 
   // Fire-and-forget recognition for a correct character (false alarm check)
@@ -165,6 +195,8 @@ export default function ArticlePractice({
               isCorrect: false,
               lesson: 0,
               lessonTitle: "",
+              word: "",
+              gradeId,
               type: "false_alarm",
               imageData,
             };
@@ -180,7 +212,7 @@ export default function ArticlePractice({
           });
         });
     },
-    []
+    [gradeId]
   );
 
   if (loading) {
@@ -234,12 +266,12 @@ export default function ArticlePractice({
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const allResults = [...results];
     // Mark unfound wrong chars as missed
     for (const wc of article.wrong_chars) {
       const found = allResults.find(
-        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char
+        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char,
       );
       if (!found) {
         allResults.push({
@@ -249,10 +281,51 @@ export default function ArticlePractice({
           isCorrect: false,
           lesson: wc.lesson,
           lessonTitle: wc.lesson_title,
+          word: wc.word,
+          gradeId,
           type: "missed",
         });
       }
     }
+
+    let needsModal = false;
+    if (personalization.enabled && personalization.activeProfile) {
+      const events: PracticeEvent[] = allResults.map((r) => ({
+        type: r.type,
+        wrongChar: r.wrongChar,
+        correctChar: r.correctChar,
+        userAnswer: r.userAnswer,
+        isCorrect: r.isCorrect,
+        lesson: r.lesson,
+        lessonTitle: r.lessonTitle,
+        word: r.word,
+        imageData: r.imageData,
+      }));
+      try {
+        const result = await recordSession({
+          profileId: personalization.activeProfile.id,
+          gradeId,
+          gradeLabel,
+          startLesson,
+          endLesson,
+          mode: practiceMode,
+          startedAt,
+          finishedAt: Date.now(),
+          events,
+        });
+        needsModal = result.quotaState === "block" || result.quotaState === "warn";
+      } catch (err) {
+        console.error("Failed to record session", err);
+      }
+    }
+
+    if (needsModal) {
+      // Store results and show modal; onFinish triggers when modal closes
+      setShowQuotaModal(true);
+      setPendingResults(allResults);
+      return;
+    }
+
     onFinish(allResults);
   };
 
@@ -420,6 +493,20 @@ export default function ArticlePractice({
             setShowCanvas(false);
             setCurrentClickedChar(null);
             setSelectedCharIndex(null);
+          }}
+        />
+      )}
+
+      {showQuotaModal && (
+        <QuotaModal
+          open={showQuotaModal}
+          onClose={() => {
+            setShowQuotaModal(false);
+            if (pendingResults) {
+              const r = pendingResults;
+              setPendingResults(null);
+              onFinish(r);
+            }
           }}
         />
       )}
