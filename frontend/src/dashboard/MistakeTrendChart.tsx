@@ -1,6 +1,5 @@
 // src/dashboard/MistakeTrendChart.tsx
 import { useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import type { TrendPoint } from "./derive";
 
 type Window = "recent7" | "recent30days" | "all";
@@ -19,9 +18,38 @@ function formatDate(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// Geometry for the hand-rolled SVG chart (viewBox units; scales via width:100%).
+const W = 600;
+const H = 220;
+const PAD_L = 40;
+const PAD_R = 16;
+const PAD_T = 16;
+const PAD_B = 28;
+const PLOT_W = W - PAD_L - PAD_R;
+const PLOT_H = H - PAD_T - PAD_B;
+const Y_TICKS = [0, 25, 50, 75, 100];
+
+function xFor(i: number, n: number): number {
+  if (n <= 1) return PAD_L + PLOT_W / 2;
+  return PAD_L + (i / (n - 1)) * PLOT_W;
+}
+
+function yFor(accuracy: number): number {
+  return PAD_T + (1 - accuracy / 100) * PLOT_H;
+}
+
 export default function MistakeTrendChart({ points }: { points: TrendPoint[] }) {
   const [window, setWindow] = useState<Window>("recent7");
   const filtered = filterPoints(points, window);
+  const n = filtered.length;
+
+  // Thin x-axis labels so they don't overlap when there are many points.
+  const labelStep = n <= 8 ? 1 : Math.ceil(n / 6);
+  const showValueLabels = n > 0 && n <= 8;
+
+  const linePoints = filtered
+    .map((p, i) => `${xFor(i, n).toFixed(1)},${yFor(p.accuracy).toFixed(1)}`)
+    .join(" ");
 
   return (
     <div className="trend-chart-card">
@@ -33,21 +61,62 @@ export default function MistakeTrendChart({ points }: { points: TrendPoint[] }) 
           <option value="all">全部</option>
         </select>
       </div>
-      {filtered.length === 0 ? (
+      {n === 0 ? (
         <p className="empty-hint">還沒有資料，再多練幾次就會看到趨勢圖!</p>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={filtered} margin={{ top: 12, right: 12, bottom: 12, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-            <XAxis dataKey="startedAt" tickFormatter={formatDate} fontSize={12} />
-            <YAxis domain={[0, 100]} fontSize={12} unit="%" />
-            <Tooltip
-              labelFormatter={(ts) => new Date(ts as number).toLocaleString()}
-              formatter={(val) => [`${val}%`, "正確率"]}
+        <svg
+          className="trend-chart-svg"
+          viewBox={`0 0 ${W} ${H}`}
+          width="100%"
+          role="img"
+          aria-label="正確率趨勢折線圖"
+        >
+          {/* horizontal grid + y labels */}
+          {Y_TICKS.map((v) => {
+            const y = yFor(v);
+            return (
+              <g key={v}>
+                <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#eee" strokeWidth={1} />
+                <text x={PAD_L - 6} y={y + 4} textAnchor="end" fontSize={12} fill="#888">
+                  {v}%
+                </text>
+              </g>
+            );
+          })}
+
+          {/* the trend line (omit for a single point — a lone dot reads fine) */}
+          {n > 1 && (
+            <polyline
+              points={linePoints}
+              fill="none"
+              stroke="#ff6b6b"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            <Line type="monotone" dataKey="accuracy" stroke="#ff6b6b" strokeWidth={3} dot={{ r: 4 }} />
-          </LineChart>
-        </ResponsiveContainer>
+          )}
+
+          {/* dots, x labels, optional value labels */}
+          {filtered.map((p, i) => {
+            const cx = xFor(i, n);
+            const cy = yFor(p.accuracy);
+            return (
+              <g key={p.startedAt}>
+                <circle cx={cx} cy={cy} r={4} fill="#ff6b6b" />
+                {showValueLabels && (
+                  <text x={cx} y={cy - 10} textAnchor="middle" fontSize={11} fill="#ff6b6b">
+                    {p.accuracy}%
+                  </text>
+                )}
+                {i % labelStep === 0 && (
+                  <text x={cx} y={H - 8} textAnchor="middle" fontSize={12} fill="#888">
+                    {formatDate(p.startedAt)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
       )}
     </div>
   );
