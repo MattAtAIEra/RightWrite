@@ -1819,3 +1819,25 @@ body::after {
   object-fit: contain;
   background: white;
 }
+
+.dashboard-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dashboard-header h2 {
+  flex: 1;
+  margin: 0;
+}
+.profile-switcher {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: inherit;
+}

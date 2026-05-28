@@ -5,6 +5,7 @@ import LessonSelector from "./components/LessonSelector";
 import ArticlePractice from "./components/ArticlePractice";
 import ResultView from "./components/ResultView";
 import { PersonalizationProvider } from "./personalization/PersonalizationContext";
+import Dashboard from "./dashboard/Dashboard";
 
 function App() {
   const [stage, setStage] = useState<AppStage>("select");
@@ -60,14 +61,7 @@ function App() {
         {stage === "result" && (
           <ResultView results={results} onRetry={handleRetry} onBack={handleBack} />
         )}
-        {stage === "dashboard" && (
-          // Dashboard component lands in Phase 4; placeholder for now
-          <div style={{ padding: 24 }}>
-            <button onClick={handleBack}>← 返回</button>
-            <h2>學習儀表板</h2>
-            <p>儀表板將於 Phase 4 上線。</p>
-          </div>
-        )}
+        {stage === "dashboard" && <Dashboard onBack={handleBack} />}
       </div>
     </PersonalizationProvider>
   );
