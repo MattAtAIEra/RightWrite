@@ -10,14 +10,12 @@ import type { Session } from "../../storage/types";
 
 function session(o: Partial<Session> & { id: string; startedAt: number }): Session {
   return {
-    id: o.id,
     profileId: "p",
     gradeId: "g",
     gradeLabel: "GLabel",
     startLesson: 1,
     endLesson: 3,
     mode: "article",
-    startedAt: o.startedAt,
     finishedAt: o.startedAt + 1000,
     events: [],
     summary: { totalWrong: 5, foundCorrect: 4, falseAlarms: 1, missed: 0, accuracy: 0.66 },

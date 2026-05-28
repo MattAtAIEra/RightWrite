@@ -1668,3 +1668,154 @@ body::after {
   margin-bottom: 16px;
   border: 2px dashed #ffa94d;
 }
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (max-width: 600px) {
+  .stats-cards { grid-template-columns: repeat(2, 1fr); }
+}
+.stats-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.stats-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--coral, #ff6b6b);
+}
+.stats-label {
+  font-size: 13px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.trend-chart-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin: 16px 0;
+}
+.trend-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.trend-chart-header h3 {
+  margin: 0;
+}
+.trend-chart-header select {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: inherit;
+}
+.empty-hint {
+  text-align: center;
+  color: #999;
+  padding: 24px;
+}
+
+.lesson-progress-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin: 16px 0;
+}
+.lesson-progress-card h3 {
+  margin-top: 0;
+}
+.lesson-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.lesson-card {
+  background: var(--cream, #fff8ec);
+  padding: 12px;
+  border-radius: 12px;
+}
+.lesson-card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.lesson-card-stars {
+  color: #ffa94d;
+  margin: 4px 0;
+}
+.lesson-card-meta {
+  font-size: 12px;
+  color: #888;
+}
+
+.top-mistakes-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin: 16px 0;
+}
+.top-mistakes-card h3 {
+  margin-top: 0;
+}
+.top-mistakes-list {
+  list-style: decimal inside;
+  padding: 0;
+  margin: 0;
+}
+.top-mistake-item {
+  padding: 8px 0;
+  border-bottom: 1px dashed #eee;
+}
+.top-mistake-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.top-mistake-char {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--coral, #ff6b6b);
+}
+.top-mistake-stats {
+  font-size: 13px;
+  color: #555;
+}
+.top-mistake-lesson {
+  font-size: 12px;
+  color: #888;
+}
+.top-mistake-toggle {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+.top-mistake-thumbnails {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.top-mistake-thumbnails img {
+  width: 48px;
+  height: 48px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  object-fit: contain;
+  background: white;
+}
