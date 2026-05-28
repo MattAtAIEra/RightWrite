@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/personalization/PersonalizationContext.tsx
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
@@ -27,7 +28,9 @@ interface PersonalizationContextValue {
 const Ctx = createContext<PersonalizationContextValue | null>(null);
 
 export function PersonalizationProvider({ children }: { children: ReactNode }) {
-  const [enabled, setEnabledState] = useState(false);
+  const [enabled, setEnabledState] = useState<boolean>(
+    () => localStorage.getItem(PERSONALIZATION_ENABLED_KEY) === "true",
+  );
   const [activeProfile, setActiveProfileState] = useState<Profile | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
@@ -38,8 +41,6 @@ export function PersonalizationProvider({ children }: { children: ReactNode }) {
   // Initial rehydrate
   useEffect(() => {
     let alive = true;
-    const enabledStored = localStorage.getItem(PERSONALIZATION_ENABLED_KEY) === "true";
-    setEnabledState(enabledStored);
     (async () => {
       const all = await storageListProfiles();
       if (!alive) return;

@@ -20,6 +20,8 @@ export default function Dashboard({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (!activeProfile) return;
+    // loading toggles intentionally when activeProfile changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     (async () => {
       const [sessions, top] = await Promise.all([

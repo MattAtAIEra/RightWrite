@@ -151,7 +151,7 @@ export default function ArticlePractice({
           setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
         });
     },
-    []
+    [gradeId]
   );
 
   // Fire-and-forget recognition for a correct character (false alarm check)
@@ -212,7 +212,7 @@ export default function ArticlePractice({
           });
         });
     },
-    []
+    [gradeId]
   );
 
   if (loading) {
