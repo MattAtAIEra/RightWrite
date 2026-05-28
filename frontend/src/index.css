@@ -1876,3 +1876,19 @@ body::after {
   color: white;
   border-color: var(--coral, #ff6b6b);
 }
+.settings-action {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+}
+.settings-action:hover {
+  background: var(--cream, #fff8ec);
+}
