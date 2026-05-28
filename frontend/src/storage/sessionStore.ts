@@ -3,6 +3,7 @@ import { getDB } from "./db";
 import { applyEvent } from "./charStatsStore";
 import { putImage } from "./imageStore";
 import { isSkippingImages } from "./skipImagesFlag";
+import { ensureRoomForImage } from "./quota";
 import type { Session, PracticeEvent, SessionSummary } from "./types";
 
 export interface RecordSessionInput {
@@ -40,7 +41,13 @@ function summarize(events: PracticeEvent[]): SessionSummary {
   };
 }
 
-export async function recordSession(input: RecordSessionInput): Promise<Session> {
+export interface RecordSessionResult {
+  session: Session;
+  quotaState: "ok" | "warn" | "block";
+  imagesSkipped: number;
+}
+
+export async function recordSession(input: RecordSessionInput): Promise<RecordSessionResult> {
   const id = crypto.randomUUID();
   const session: Session = {
     id,
@@ -60,6 +67,10 @@ export async function recordSession(input: RecordSessionInput): Promise<Session>
   const db = await getDB();
   await db.put("sessions", session);
 
+  let worstQuota: "ok" | "warn" | "block" = "ok";
+  let imagesSkipped = 0;
+  const skip = isSkippingImages();
+
   for (const e of input.events) {
     await applyEvent({
       profileId: input.profileId,
@@ -67,18 +78,22 @@ export async function recordSession(input: RecordSessionInput): Promise<Session>
       timestamp: input.finishedAt,
       event: e,
     });
-    if (e.imageData && !isSkippingImages()) {
-      await putImage({
-        profileId: input.profileId,
-        sessionId: id,
-        char: e.correctChar,
-        capturedAt: input.finishedAt,
-        imageData: e.imageData,
-      });
-    }
+    if (!e.imageData) continue;
+    if (skip) { imagesSkipped++; continue; }
+    const estimate = Math.ceil(e.imageData.length * 0.75); // base64 → bytes
+    const state = await ensureRoomForImage(estimate);
+    if (state === "block") { imagesSkipped++; worstQuota = "block"; continue; }
+    if (state === "warn" && worstQuota === "ok") worstQuota = "warn";
+    await putImage({
+      profileId: input.profileId,
+      sessionId: id,
+      char: e.correctChar,
+      capturedAt: input.finishedAt,
+      imageData: e.imageData,
+    });
   }
 
-  return session;
+  return { session, quotaState: worstQuota, imagesSkipped };
 }
 
 export async function listByProfile(profileId: string): Promise<Session[]> {

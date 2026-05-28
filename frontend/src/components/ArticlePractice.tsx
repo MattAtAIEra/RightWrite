@@ -7,6 +7,7 @@ import { recordSession } from "../storage/sessionStore";
 import { listByProfile as listCharStats } from "../storage/charStatsStore";
 import { buildWeightedChars } from "../personalization/weights";
 import type { PracticeEvent } from "../storage/types";
+import QuotaModal from "../personalization/QuotaModal";
 
 interface Props {
   startLesson: number;
@@ -65,6 +66,8 @@ export default function ArticlePractice({
   } | null>(null);
   const [showZhuyin, setShowZhuyin] = useState(false);
   const [results, setResults] = useState<AnswerResult[]>([]);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -285,7 +288,7 @@ export default function ArticlePractice({
       }
     }
 
-    // Persist if personalization is on and a profile is active
+    let needsModal = false;
     if (personalization.enabled && personalization.activeProfile) {
       const events: PracticeEvent[] = allResults.map((r) => ({
         type: r.type,
@@ -299,7 +302,7 @@ export default function ArticlePractice({
         imageData: r.imageData,
       }));
       try {
-        await recordSession({
+        const result = await recordSession({
           profileId: personalization.activeProfile.id,
           gradeId,
           gradeLabel,
@@ -310,9 +313,17 @@ export default function ArticlePractice({
           finishedAt: Date.now(),
           events,
         });
+        needsModal = result.quotaState === "block" || result.quotaState === "warn";
       } catch (err) {
         console.error("Failed to record session", err);
       }
+    }
+
+    if (needsModal) {
+      // Store results and show modal; onFinish triggers when modal closes
+      setShowQuotaModal(true);
+      setPendingResults(allResults);
+      return;
     }
 
     onFinish(allResults);
@@ -482,6 +493,20 @@ export default function ArticlePractice({
             setShowCanvas(false);
             setCurrentClickedChar(null);
             setSelectedCharIndex(null);
+          }}
+        />
+      )}
+
+      {showQuotaModal && (
+        <QuotaModal
+          open={showQuotaModal}
+          onClose={() => {
+            setShowQuotaModal(false);
+            if (pendingResults) {
+              const r = pendingResults;
+              setPendingResults(null);
+              onFinish(r);
+            }
           }}
         />
       )}

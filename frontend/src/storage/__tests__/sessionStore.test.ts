@@ -47,7 +47,7 @@ describe("recordSession", () => {
       ev({ type: "false_alarm", correctChar: "正", imageData: "data:img3" }),
     ];
 
-    const session = await recordSession({ ...baseSession, events });
+    const { session } = await recordSession({ ...baseSession, events });
 
     // Session is stored
     const sessions = await listByProfile("p1");
