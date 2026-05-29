@@ -181,9 +181,93 @@
 
 ---
 
+## Phase 5: Personalization — Per-Profile Tracking, Weighted Review, Dashboard
+
+**Date**: 2026-05-23 (design) → 2026-05-28 (merged, PR #6)
+**Trigger**: User requested a personalization feature — default-off, multi-profile mistake tracking stored on the iPad, weighted review of previously-wrong characters, and a learning dashboard. Cloud sync reserved as a future paid tier.
+
+Design spec: `docs/superpowers/specs/2026-05-23-personalization-design.md`
+Implementation plan: `docs/superpowers/plans/2026-05-23-personalization.md`
+Executed subagent-driven, 6 phases, ~28 commits, with per-task spec + code-quality review.
+
+### Completed Items
+
+1. **Build setup** (`frontend/package.json`, `vite.config.ts`, `vitest.setup.ts`, `backend/requirements.txt`)
+   - Added vitest + fake-indexeddb + @testing-library/* for frontend tests; pytest for backend
+   - `idb` for IndexedDB; (recharts was added here then removed in Phase 6)
+
+2. **IndexedDB storage layer** (`frontend/src/storage/`)
+   - `db.ts` — 4 object stores: `profiles`, `sessions`, `charStats`, `handwritingImages` with indexes; `closeDB()` closes the live connection (needed for test isolation)
+   - `profileStore.ts`, `sessionStore.ts` (`recordSession` writes session + char aggregates + images), `charStatsStore.ts` (`applyEvent` event→stat rules, `listTopMistakes`), `imageStore.ts` (TTL purge), `quota.ts` (`ensureRoomForImage`)
+   - Cloud-sync hooks: every record carries `updatedAt` / `syncedAt`
+
+3. **Personalization context + UI** (`frontend/src/personalization/`)
+   - `PersonalizationContext.tsx` — default-off toggle (localStorage), active profile state
+   - `ProfilePicker.tsx` — profile cards + add modal (name + 1 of 8 animal emoji)
+   - `LessonSelector.tsx` — ⚙️ settings dropdown, profile bar, 📊 dashboard entry, start disabled until a profile is chosen
+   - `ArticlePractice.tsx` — records a session on finish; builds `weightedChars` (filtered by current gradeId) before generating
+
+4. **Weighted review** (`frontend/src/personalization/weights.ts`, `backend/main.py`)
+   - Frontend weight = `1 + mistakeRate*3`, decayed by `0.5^streak`, floored at 1
+   - Backend `GenerateArticleRequest.weighted_chars` + `_weighted_sample_without_replacement` (Efraimidis-Spirakis)
+
+5. **Dashboard** (`frontend/src/dashboard/`)
+   - `derive.ts` (pure stats helpers) + 4 widgets: StatsCards, MistakeTrendChart, LessonProgressGrid, TopMistakesList (expandable handwriting thumbnails)
+
+6. **Storage lifecycle** (Phase 5 plan §6)
+   - 4-month (120-day) TTL auto-purge of handwriting images on app mount
+   - Quota warning modal (>80% warn / >95% block) shown after recording, via pending-results pattern so results still display
+   - Persistent "skip images" flag + manual cleanup buttons in settings
+
+### Discoveries & Fixes
+
+- **Spec/test contradiction in `listTopMistakes`**: plan's impl filtered `mistakes > 0` but the test expected a 0-mistake char included. Resolved in favour of the impl (a "top mistakes" list should exclude never-wrong chars); test updated.
+- **`applyEvent` wiping metadata**: a `false_alarm` event carries `lesson=0`/`word=""`; unconditional overwrite erased good metadata from a prior `found_wrong`. Added `hasFreshMeta` guard.
+- **IndexedDB test flakiness**: fake-indexeddb's `deleteDatabase` deadlocks when a connection is still open. Fixed with `closeDB()` closing the live connection + per-test `new IDBFactory()` reset.
+
+### Test Results
+
+- Frontend: 49/49 vitest tests pass (storage, context, weights, dashboard derive)
+- Backend: 10/10 pytest tests pass (weighted sampling + generate integration)
+- Build: SUCCESS; no new lint errors
+- Cloud Build + Deploy (PR #6 merge): SUCCESS — **but shipped a production blank screen, see Phase 6**
+
+---
+
+## Phase 6: Fix Production Blank Screen (recharts / es-toolkit / Rolldown)
+
+**Date**: 2026-05-29 (merged, PR #7)
+**Trigger**: After PR #6 deployed, the live Cloud Run site rendered a blank screen with console error `Uncaught TypeError: t is not a function`.
+
+### Completed Items
+
+1. **Replaced recharts with a hand-rolled SVG line chart** (`frontend/src/dashboard/MistakeTrendChart.tsx`, `frontend/src/index.css`)
+   - Same props + window selector (近7次/近30天/全部); removed `recharts` dependency entirely
+   - Bundle dropped from 569 KB → 239 KB minified (no more chunk-size warning)
+
+### Discoveries & Fixes
+
+- **Symptom**: Blank screen in production only (dev + tests were fine); minified error `t is not a function`, unminified `require_isUnsafeProperty is not a function`, thrown at module-eval before React mounts.
+- **Root cause**: recharts 3.8.1 imports `es-toolkit/compat/*`, whose package `exports` expose **only CommonJS** for those subpaths (no ESM condition). Vite 8's **Rolldown** bundler mis-generates the CJS interop wrapper for es-toolkit's `get.js` — `var require_isUnsafeProperty = require_isUnsafeProperty()` self-references an undefined binding → calls `undefined()`. recharts is loaded at startup (static `import Dashboard`), so the whole app fails to mount.
+- **Why dev passed**: dev uses esbuild pre-bundling which handles the CJS correctly; only the Rolldown production build hits the bug. `npm run build` succeeds (it's a runtime, not compile, error), so CI/build checks didn't catch it.
+- **Fix**: recharts was the sole consumer of es-toolkit and added ~1.3 MB for one chart. Hand-rolled SVG removes the dependency, the bundler incompatibility, and the bloat.
+- **Lesson**: **`npm run dev` does NOT reveal Rolldown CJS-interop bugs.** Verify the production build by serving it through the FastAPI backend (mirrors Cloud Run) and loading it in a browser before merging. Treat CJS-only deps with suspicion on the Vite 8 / Rolldown toolchain. (Recorded in auto-memory `project_charting_no_recharts.md`.)
+
+### Verification
+
+- Reproduced + verified with headless Chrome against the production build (FastAPI serving `backend/static` + `/api`): before — empty `#root` + pageerror; after — full LessonSelector renders, zero console errors
+- 49 frontend + 10 backend tests still pass
+- Live verification post-deploy: revision `rightwrite-00039-dtw` serving 100% traffic; live `#root` renders full UI
+
+---
+
 ## TODO
 
 - [ ] Enable Cloud Vision API on GCP project (currently disabled — would improve recognition as primary method)
 - [ ] Investigate `gemini-3-flash-preview` recognition quality for children's handwriting
+- [ ] Manual end-to-end check of personalization on the live site: create profile → practice → 📊 dashboard SVG trend chart
+- [ ] Pre-existing lint debt (5 errors in `ResultView.tsx` / `LessonSelector.tsx` from before personalization) — not gating, clean up when convenient
+- [ ] Optional follow-up: make `recordSession` atomic for session + charStats (single IDB transaction; images stay best-effort due to async quota check)
+- [ ] Delete merged remote branches `feat/personalization` and `fix/recharts-prod-crash`
 - [x] ~~Parse downloaded Excel files to extend `vocab_data.py` for other grades/publishers~~
 - [x] ~~Clean up duplicate files in `resource/四下-康軒版/`~~
