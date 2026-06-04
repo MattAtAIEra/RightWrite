@@ -261,8 +261,57 @@ Executed subagent-driven, 6 phases, ~28 commits, with per-task spec + code-quali
 
 ---
 
+## Phase 7: Academic Redesign — 「墨韻硃砂」Scholarly Aesthetic
+
+**Date**: 2026-06-05
+**Trigger**: User invoked `/frontend-design` on a new `new-design` branch: supply Zen Maru Gothic + LXGW WenKai TC fonts, fix the inconsistent-font problem, and redesign the UI in an academic style (學院風) — explicitly *not* cute.
+
+Full-frontend visual redesign. No backend, API, storage, or logic changes. Class names, the 直書 `vertical-rl` layout, the zhuyin ruby rules, and the hand-rolled SVG chart structure were all preserved — only typography, colour, motion, and decorative motifs changed.
+
+### Completed Items
+
+1. **Typography unification** (`frontend/index.html`, `frontend/src/index.css`)
+   - Removed the third font `ZCOOL KuaiLe`; the Google Fonts link now loads `Zen Maru Gothic` (400/500/700) + `LXGW WenKai TC` (400/700)
+   - Two-font system via tokens: `--font-display` = Zen Maru Gothic (UI chrome, numerals, headings, labels), `--font-body` = LXGW WenKai TC (article text, characters, seals)
+   - Eliminated the dashboard/personalization `font-family: inherit` (system-font) inconsistency — the root cause of the "字體不一" report
+   - Favicon ✏️ emoji → inline cinnabar 「正」 seal SVG; added `theme-color`; title → `改錯字練習 · RightWrite`
+
+2. **Design-system rewrite** (`frontend/src/index.css`, full rewrite)
+   - New `:root` design tokens: rice-paper surfaces (宣紙) + fractal-noise grain overlay, ink text hierarchy (墨), and a semantic colour system — cinnabar 硃砂 (primary action / corrections), indigo 青黛 (selection / secondary), bamboo 竹綠 (success), gold 赭金 (highlight / warnings)
+   - Old coral/teal/yellow aliases (`--primary` etc.) remapped onto the new palette so any stray references stay coherent
+   - Refined geometry (radii 12/8/6 px, warm low shadows) and calm `ease-out` motion; removed spring/overshoot, wobble, sparkle, and floating-blob animations
+   - All component sections restyled in place (selector, practice, canvas, result, dashboard, personalization, responsive)
+
+3. **De-cuting component edits** (academic motifs replace cartoon elements)
+   - `LessonSelector.tsx` — `HappyKidsIllustration` (cartoon kids) → `ScholarMark`: a brushed ensō ink ring with a cinnabar 「正」 seal stamped over it
+   - `ResultView.tsx` — `getEmoji` (🏆🌟👍💪📖) → `getGradeMark` returning traditional grades 優/甲/乙/丙/丁, rendered as a 硃砂 seal (`.result-emoji`, 白文 style, stamp animation); confetti + celebration-star + accuracy-circle colours moved to the academic palette; correction canvas grid → cinnabar 米字格 + ink stroke
+   - `HandwritingCanvas.tsx` — 九宮格 grid `#e0e0e0` → cinnabar `rgba(178,58,46,.22)` (authentic red practice-grid), stroke `#333` → ink `#2a241d`
+   - `MistakeTrendChart.tsx` — hand-rolled SVG line/dots/labels/grid recoloured to cinnabar + ink-faint (kept the no-recharts hand-rolled structure per `project_charting_no_recharts`)
+
+4. **Branch + auto-memory**
+   - Committed to `new-design` and pushed (`origin/new-design`, upstream set); single commit `feat(design): 學院風格重新設計（墨韻硃砂）`
+   - Saved auto-memory `feedback_academic_design.md` recording the pivot away from CLAUDE.md's cute aesthetic
+
+### Discoveries & Fixes
+
+- **Font inconsistency was three-fold**: ZCOOL KuaiLe (headings) + LXGW WenKai TC (body) + system fonts (`inherit`) in the dashboard/personalization code added during Phase 5. The dashboard panels also used generic styling (`#fff` cards, `#888` grey, `rgba(0,0,0,.05)` shadows) with no shared design language — fixed by a single token-driven card chrome.
+- **`.lesson-card` class collision**: used by both the selector preview and the dashboard progress grid with different children. Gave it a shared neutral base and scoped the context-specific bits under `.lesson-preview .lesson-card` / `.lesson-progress-grid` to avoid one overriding the other.
+- **Recognition safety**: kept the handwriting canvas *background* white (max contrast for the Vision/Gemini OCR pipeline) and only recoloured the guide grid + stroke — the cinnabar guides mimic a real 米字格 practice sheet without risking recognition.
+- **CLAUDE.md is now stale**: its "Frontend Aesthetics" section still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion — all of which this phase intentionally reverses. Flagged for update (see TODO).
+- **Pre-existing lint debt unchanged**: the 5 lint errors (`Math.random` in confetti, setState-in-effect, unused vars) live on lines this phase did not touch; no new lint errors were introduced.
+
+### Test Results
+
+- Build: SUCCESS (`tsc -b && vite build`; CSS 35 KB / gzip 6.7 KB, JS 238 KB)
+- Visual verification: headless Chrome (Playwright) screenshots of all four stages (select / practice / result / dashboard) at mobile 430 px + desktop 880 px against an offline harness loading the built CSS — zero console/page errors, no font-load failures, design confirmed cohesive
+- Lint: 5 errors, all pre-existing (unchanged from before this phase); 0 introduced
+
+---
+
 ## TODO
 
+- [ ] Review / open PR for the `new-design` redesign branch (Phase 7), then deploy
+- [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Enable Cloud Vision API on GCP project (currently disabled — would improve recognition as primary method)
 - [ ] Investigate `gemini-3-flash-preview` recognition quality for children's handwriting
 - [ ] Manual end-to-end check of personalization on the live site: create profile → practice → 📊 dashboard SVG trend chart
