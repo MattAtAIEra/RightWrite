@@ -36,7 +36,7 @@ export default function HandwritingCanvas({
     ctx.fillRect(0, 0, rect.width, rect.height);
 
     // Draw grid lines (like 九宮格)
-    ctx.strokeStyle = "#e0e0e0";
+    ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 5]);
 
@@ -93,7 +93,7 @@ export default function HandwritingCanvas({
     setIsDrawing(true);
     setHasDrawn(true);
 
-    ctx.strokeStyle = "#333333";
+    ctx.strokeStyle = "#2a241d";
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -129,7 +129,7 @@ export default function HandwritingCanvas({
     ctx.fillRect(0, 0, rect.width * dpr, rect.height * dpr);
 
     // Redraw grid
-    ctx.strokeStyle = "#e0e0e0";
+    ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();

@@ -76,8 +76,8 @@ export default function MistakeTrendChart({ points }: { points: TrendPoint[] }) 
             const y = yFor(v);
             return (
               <g key={v}>
-                <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#eee" strokeWidth={1} />
-                <text x={PAD_L - 6} y={y + 4} textAnchor="end" fontSize={12} fill="#888">
+                <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#e3d6bd" strokeWidth={1} />
+                <text x={PAD_L - 6} y={y + 4} textAnchor="end" fontSize={12} fill="#9b8c74">
                   {v}%
                 </text>
               </g>
@@ -89,7 +89,7 @@ export default function MistakeTrendChart({ points }: { points: TrendPoint[] }) 
             <polyline
               points={linePoints}
               fill="none"
-              stroke="#ff6b6b"
+              stroke="#b23a2e"
               strokeWidth={3}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -102,14 +102,14 @@ export default function MistakeTrendChart({ points }: { points: TrendPoint[] }) 
             const cy = yFor(p.accuracy);
             return (
               <g key={p.startedAt}>
-                <circle cx={cx} cy={cy} r={4} fill="#ff6b6b" />
+                <circle cx={cx} cy={cy} r={4} fill="#b23a2e" />
                 {showValueLabels && (
-                  <text x={cx} y={cy - 10} textAnchor="middle" fontSize={11} fill="#ff6b6b">
+                  <text x={cx} y={cy - 10} textAnchor="middle" fontSize={11} fill="#b23a2e">
                     {p.accuracy}%
                   </text>
                 )}
                 {i % labelStep === 0 && (
-                  <text x={cx} y={H - 8} textAnchor="middle" fontSize={12} fill="#888">
+                  <text x={cx} y={H - 8} textAnchor="middle" fontSize={12} fill="#9b8c74">
                     {formatDate(p.startedAt)}
                   </text>
                 )}
