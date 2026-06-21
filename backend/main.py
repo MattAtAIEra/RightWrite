@@ -347,35 +347,38 @@ def generate_article(req: GenerateArticleRequest):
 def recognize_handwriting(req: RecognizeRequest):
     """
     Recognize handwritten character from canvas image.
-    Tries Google Cloud Vision first, then Claude Vision as fallback.
+
+    Primary engine is Gemini multimodal — it handles messy single-character
+    handwriting from young students far better than sparse-text OCR. Google
+    Cloud Vision is the fallback. Both outputs are normalized to Traditional
+    Chinese before comparison, so a Simplified-form recognition never fails a
+    correctly written answer.
     """
     expected = req.expected_char
 
-    # Try Google Cloud Vision API first
-    try:
-        recognized, confidence = _recognize_with_vision_api(req.image_data)
-        logger.info("Vision API recognized: %s (expected: %s)", recognized, expected)
-        is_correct = recognized == expected
-        return RecognizeResponse(
-            recognized_char=recognized,
-            is_correct=is_correct,
-            confidence=confidence,
-        )
-    except Exception as e:
-        logger.warning("Vision API failed: %s", e, exc_info=True)
-
-    # Fallback: use Gemini Vision for handwriting recognition
+    # Primary: Gemini multimodal handwriting recognition
     try:
         recognized, confidence = _recognize_with_gemini(req.image_data)
         logger.info("Gemini recognized: %s (expected: %s)", recognized, expected)
-        is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
-            is_correct=is_correct,
+            is_correct=recognized == expected,
             confidence=confidence,
         )
     except Exception as e:
-        logger.error("Gemini recognition failed: %s", e, exc_info=True)
+        logger.warning("Gemini recognition failed: %s", e, exc_info=True)
+
+    # Fallback: Google Cloud Vision API
+    try:
+        recognized, confidence = _recognize_with_vision_api(req.image_data)
+        logger.info("Vision API recognized: %s (expected: %s)", recognized, expected)
+        return RecognizeResponse(
+            recognized_char=recognized,
+            is_correct=recognized == expected,
+            confidence=confidence,
+        )
+    except Exception as e:
+        logger.error("Vision API recognition failed: %s", e, exc_info=True)
 
     # Last resort: cannot recognize
     logger.error("All recognition methods failed for expected=%s", expected)
@@ -384,6 +387,39 @@ def recognize_handwriting(req: RecognizeRequest):
         is_correct=False,
         confidence=0.0,
     )
+
+
+_opencc_converter = None
+
+
+def _normalize_to_traditional(char: str) -> str:
+    """Best-effort Simplified->Traditional (Taiwan standard) normalization.
+
+    Recognition engines sometimes return the Simplified form of a character
+    (e.g. 學->学, 過->过, 為->为). The practice vocabulary is all Traditional,
+    so without this a correctly written answer would be judged wrong. Falls
+    back to the original character if OpenCC is unavailable.
+    """
+    global _opencc_converter
+    if not char:
+        return char
+    try:
+        if _opencc_converter is None:
+            from opencc import OpenCC
+
+            _opencc_converter = OpenCC("s2tw")
+        return _opencc_converter.convert(char)
+    except Exception as e:  # pragma: no cover - defensive, OpenCC optional
+        logger.warning("OpenCC normalization unavailable: %s", e)
+        return char
+
+
+def _first_cjk(text: str) -> str | None:
+    """Return the first CJK character in *text*, dropping noise/punctuation."""
+    for c in text:
+        if '一' <= c <= '鿿':
+            return c
+    return None
 
 
 def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
@@ -397,14 +433,20 @@ def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
 
     client = vision.ImageAnnotatorClient()
     image = vision.Image(content=image_bytes)
+    # Hint Traditional Chinese (Taiwan) and use the handwriting-oriented
+    # document detector rather than sparse-text detection.
+    image_context = vision.ImageContext(language_hints=["zh-Hant", "zh-TW"])
+    response = client.document_text_detection(image=image, image_context=image_context)
 
-    response = client.text_detection(image=image)
-    texts = response.text_annotations
+    text = (response.full_text_annotation.text or "").strip()
+    if not text and response.text_annotations:
+        text = response.text_annotations[0].description.strip()
 
-    if texts:
-        recognized = texts[0].description.strip()
-        if recognized:
-            return recognized[0], 0.9
+    # Keep only the first CJK character — drop any stray 九宮格 grid lines or
+    # noise the detector may have picked up.
+    char = _first_cjk(text)
+    if char:
+        return _normalize_to_traditional(char), 0.9
     raise ValueError("No text recognized")
 
 
@@ -425,17 +467,21 @@ def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
                 mime_type="image/png",
             ),
             (
-                "這張圖片是一個手寫的中文字（寫在九宮格上）。"
-                "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
-                "如果完全無法辨識，只回覆 ？"
+                "這是一名台灣國小四年級學童手寫的『單一個』中文字，"
+                "寫在九宮格（米字格）上，筆畫可能不夠工整、比例不一、線條歪斜。"
+                "請以繁體中文（台灣教育部標準字形）的角度辨識這個字，"
+                "並務必輸出對應的『繁體字』，絕對不要輸出簡體字。"
+                "只回覆那一個繁體中文字，不要附加任何注音、拼音、說明或標點符號。"
+                "如果真的完全無法辨識，才回覆 ？"
             ),
         ],
     )
 
     recognized = response.text.strip()
-    # Accept only a single CJK character
-    if len(recognized) == 1 and '\u4e00' <= recognized <= '\u9fff':
-        return recognized, 0.85
+    # Tolerate stray whitespace/punctuation \u2014 take the first CJK character.
+    char = _first_cjk(recognized)
+    if char:
+        return _normalize_to_traditional(char), 0.85
     raise ValueError(f"Could not recognize character: {recognized!r}")
 
 
