@@ -11,58 +11,47 @@ interface Props {
   onOpenDashboard: () => void;
 }
 
-/** Scholarly emblem: a brushed ensō ink ring with a cinnabar 「正」 seal
-    stamped over it — the calligraphic counterpart to "correcting characters". */
+/** Brand mark: the character 正 ("correct") circled and ticked in red pen —
+    the exact gesture a teacher makes when a student fixes a wrong character. */
 function ScholarMark() {
   return (
     <svg
-      viewBox="0 0 200 108"
+      viewBox="8 10 166 116"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={{ width: "176px", margin: "0 auto 12px", display: "block", overflow: "visible" }}
       aria-hidden="true"
     >
-      {/* faint ink-wash halo behind the ring */}
-      <circle cx="74" cy="56" r="44" fill="#2a241d" opacity="0.03" />
-      {/* the ensō — an open brushed ring */}
-      <circle
-        cx="74"
-        cy="56"
-        r="40"
-        fill="none"
-        stroke="#2a241d"
-        strokeWidth="7"
-        strokeLinecap="round"
-        strokeDasharray="201 52"
-        transform="rotate(-42 74 56)"
-        opacity="0.9"
-      />
-      {/* the brush tail at the ring's opening */}
+      {/* the character being marked correct */}
+      <text
+        x="70"
+        y="71"
+        fontSize="62"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="var(--ink)"
+        fontFamily="'LXGW WenKai TC', serif"
+        fontWeight="700"
+      >
+        正
+      </text>
+      {/* red-pen circle — hand-drawn, with a natural overshoot where the stroke closes */}
       <path
-        d="M101 24 q9 -6 17 -3"
-        stroke="#2a241d"
-        strokeWidth="4"
+        d="M 52.5 111.4 C 50.7 110.7 44.9 109.0 41.5 107.2 C 38.1 105.3 34.9 102.9 32.1 100.3 C 29.3 97.7 26.9 94.6 24.8 91.5 C 22.7 88.4 20.8 85.1 19.4 81.6 C 18.0 78.1 16.8 74.4 16.5 70.7 C 16.2 67.0 16.4 63.1 17.4 59.5 C 18.4 55.9 20.3 52.4 22.4 49.3 C 24.4 46.2 27.3 43.4 29.9 40.8 C 32.6 38.2 35.4 35.9 38.3 33.6 C 41.2 31.3 44.1 28.9 47.4 26.9 C 50.7 24.9 54.2 22.8 58.1 21.5 C 61.9 20.3 66.2 19.4 70.3 19.4 C 74.4 19.3 78.7 20.0 82.6 21.1 C 86.5 22.2 90.3 23.9 93.8 25.8 C 97.3 27.6 100.6 29.8 103.6 32.2 C 106.6 34.6 109.5 37.3 111.8 40.2 C 114.1 43.2 116.1 46.5 117.5 49.8 C 118.9 53.2 119.6 56.8 120.0 60.4 C 120.5 63.9 120.4 67.5 120.2 71.0 C 120.0 74.5 119.7 78.1 118.9 81.6 C 118.2 85.2 117.4 88.9 115.7 92.4 C 114.1 95.8 112.0 99.3 109.2 102.1 C 106.5 104.9 102.9 107.3 99.2 109.0 C 95.6 110.7 91.3 111.7 87.3 112.4 C 83.4 113.2 79.3 113.3 75.3 113.4 C 71.4 113.5 67.5 113.4 63.6 113.1 C 59.7 112.7 55.8 112.3 52.0 111.2 C 48.2 110.2 42.8 107.6 41.0 106.9"
+        stroke="var(--cinnabar)"
+        strokeWidth="6"
         strokeLinecap="round"
         fill="none"
-        opacity="0.85"
       />
-      {/* cinnabar seal, stamped over the lower-right of the ring (白文) */}
-      <g transform="translate(108 52) rotate(-5)">
-        <rect x="0" y="0" width="46" height="46" rx="8" fill="#b23a2e" />
-        <rect x="4.5" y="4.5" width="37" height="37" rx="5" fill="none" stroke="#f4eada" strokeWidth="1.5" opacity="0.85" />
-        <text
-          x="23"
-          y="25"
-          fontSize="27"
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#f4eada"
-          fontFamily="'LXGW WenKai TC', serif"
-          fontWeight="700"
-        >
-          正
-        </text>
-      </g>
+      {/* red-pen tick beside it */}
+      <path
+        d="M 134 66 l 12 16 l 30 -42"
+        stroke="var(--cinnabar)"
+        strokeWidth="8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
