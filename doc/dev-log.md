@@ -308,12 +308,58 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 8: 提升手寫辨識準確率（繁體約束 + Gemini 主辨識 + 簡轉繁）
+
+**日期**：2026-06-21
+**觸發**：國小使用者回報——手寫常需重寫好幾次仍辨識不出。詢問是否有以「繁體中文」角度辨識。經查兩條辨識路徑皆未約束繁體，且引擎優先序不利。
+
+### 完成項目
+
+1. **辨識引擎優先序對調**（`backend/main.py` `recognize_handwriting`）
+   - 改為 Gemini 多模態「主辨識」、Google Vision OCR「備援」
+   - 根因：舊版 Vision 先跑且幾乎總會回傳某字（即使錯），較弱的 OCR 承擔了多數辨識，較強的 Gemini 只在 Vision 完全無輸出時才備援
+   - 訂正：舊 TODO 稱「Vision API 停用」已過時——`vision.googleapis.com` 實際已啟用，故對調為真實品質改動而非 no-op
+
+2. **Gemini prompt 繁體約束 + 手寫情境**（`_recognize_with_gemini`）
+   - 明確要求「以繁體中文（台灣教育部標準字形）辨識並輸出繁體字，絕不輸出簡體」
+   - 補上「國小四年級手寫、筆畫不工整、比例不一、線條歪斜」情境以增加容錯
+   - 回傳改用 `_first_cjk()` 容錯解析（取首個 CJK，容許多餘空白/標點）
+
+3. **Vision 路徑強化**（`_recognize_with_vision_api`）
+   - `text_detection` → `document_text_detection`（手寫導向偵測）
+   - 加 `language_hints=["zh-Hant", "zh-TW"]`
+   - `_first_cjk()` 過濾米字格雜訊，只取首個 CJK
+
+4. **簡轉繁正規化保險**
+   - 新增 `_normalize_to_traditional()`（OpenCC `s2tw`），套用於兩條路徑輸出
+   - `backend/requirements.txt` 加入 `opencc-python-reimplemented>=0.1.7`
+   - 避免引擎回傳簡體（学/过/为）被嚴格 `==` 比對誤判為錯字
+
+### 發現與修正
+
+- **問題**：初次「驗證」用 PIL 乾淨印刷字體（無米字格、無歪斜），全中但不能證明手寫改善，被使用者當場識破。
+- **原因**：測試輸入與真實畫布輸出差距過大。真實輸入為 `HandwritingCanvas.tsx`：白底 + 淡紅虛線米字格（`rgba(178,58,46,0.22)`，中線十字+對角線）+ 黑筆觸（`#2a241d`, lineWidth 4）→ `toDataURL("image/png")`。
+- **修正**：改用「米字格 + 台灣標楷體 TW-Kai + 旋轉/錯切/波形扭曲」的合成圖，並直接打 **live production endpoint** 驗證。
+- **教訓**：辨識類改動須用接近真實輸入驗證，且以部署後 endpoint 為準（`conf=0.85`=Gemini 路徑、`0.9`=Vision 路徑）。本機無 Vision ADC（`DefaultCredentialsError`），本機 Vision 結果一律無效、不可作對照證據。合成扭曲字仍比真小孩潦草字工整，真實幅度須待實際使用確認。
+
+### 測試結果
+
+- 單元測試：10/10 通過（pytest）
+- 模型名核對：`gemini-3-flash-preview` 存在（ListModels API）
+- OpenCC `s2tw`：学→學、过→過、为→為、说→說 正確；繁體輸入維持不變
+- 簡轉繁確定性展示：引擎回傳 学/过/爱/万 → 舊判定「錯」、新判定「對」（4/4 假性錯誤消除）
+- **線上 production 實打**（revision `rightwrite-00041-lfg`）：合成扭曲圖 8/8 命中（學/過/愛/萬/葉/廣/鄉/懂），`conf=0.85` 確認走 Gemini 主路徑
+- Build / 部署：成功（Cloud Run `rightwrite-00041-lfg`，asia-east1，100% 流量）
+
+---
+
 ## TODO
 
-- [ ] Review / open PR for the `new-design` redesign branch (Phase 7), then deploy
+- [ ] Open PR for the `new-design` branch (Phases 7–8) — already deployed to production as `rightwrite-00041-lfg`, but not yet merged to default branch
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
-- [ ] Enable Cloud Vision API on GCP project (currently disabled — would improve recognition as primary method)
-- [ ] Investigate `gemini-3-flash-preview` recognition quality for children's handwriting
+- [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
+- [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
+- [x] ~~Enable Cloud Vision API on GCP project~~ — already enabled (`vision.googleapis.com`); the prior note was stale. Vision is now the fallback engine
 - [ ] Manual end-to-end check of personalization on the live site: create profile → practice → 📊 dashboard SVG trend chart
 - [ ] Pre-existing lint debt (5 errors in `ResultView.tsx` / `LessonSelector.tsx` from before personalization) — not gating, clean up when convenient
 - [ ] Optional follow-up: make `recordSession` atomic for session + charStats (single IDB transaction; images stay best-effort due to async quota check)
