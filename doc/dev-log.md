@@ -353,9 +353,39 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 9: Logo 重新設計 — 紅筆圈正字加打勾
+
+**日期**：2026-06-21
+**觸發**：使用者回報首頁 logo「很奇怪」，並指定方向——用「正」字、加打勾、紅筆圈起來。
+
+### 完成項目
+
+1. **品牌標記 `ScholarMark`**（`frontend/src/components/LessonSelector.tsx`）
+   - 舊版：斷掉的墨色 ensō 圓環 + 偏在右下的硃砂方形印章「正」——正字未被圈住、語意不清
+   - 新版：墨黑「正」字置中，硃砂紅筆「圈起來 + 右側打勾」，呼應老師批改「答對」的手勢，貼合「改錯字」主題
+   - 紅圈為程式生成的手繪感路徑：橢圓 + 輕微抖動（sin 疊加）+ 收筆 overshoot 自然交疊，Catmull-Rom 平滑，非死板正圓
+   - 改用主題色票 `var(--ink)` / `var(--cinnabar)`（取代寫死的 hex），與全站硃砂自動一致
+   - favicon（`frontend/index.html`）維持原紅方塊「正」——細節在 16px 才清晰，圈+勾會糊
+
+### 發現與修正
+
+- **問題**：本機以建置產物截圖時，首頁卡在「載入中…」，logo 未顯示。
+- **原因**：`ScholarMark` 在 lessons/grades API 載入後才渲染；純靜態 server 無 `/api`。
+- **修正**：改以本機 `uvicorn main:app` 跑真實後端再截圖，確認 logo 在實際 app 內正確渲染、CSS 變數有解析。
+- **教訓**：前端視覺改動須在「資料就緒」狀態下驗證真實畫面，不能只看靜態檔；延續 Phase 8 的「以真實渲染為準」原則。
+
+### 測試結果
+
+- Build：成功（`tsc -b && vite build`；CSS 35.06 KB / gzip 6.73 KB、JS 238.34 KB）
+- 設計驗證：headless Chrome 截圖比較三變體（圈+勾並排 / 勾鑲圈右上 / 閉合圈+並排勾），採「手繪圈+右側並排勾」
+- 真實畫面驗證：本機 uvicorn + 截圖、線上 production 截圖各一，logo 皆正確渲染
+- 部署：成功（Cloud Run `rightwrite-00042-r42`，asia-east1，100% 流量）
+
+---
+
 ## TODO
 
-- [ ] Open PR for the `new-design` branch (Phases 7–8) — already deployed to production as `rightwrite-00041-lfg`, but not yet merged to default branch
+- [ ] Open PR for the `new-design` branch (Phases 7–9) — already deployed to production as `rightwrite-00042-r42`, but not yet merged to default branch
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
 - [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
