@@ -5,6 +5,40 @@ interface Props {
   onCancel: () => void;
 }
 
+/** Fill the white ground and draw the 米字格 guide lines, in CSS-pixel space.
+    Single source of truth so initial paint and 「清除重寫」 stay identical. */
+function paintBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+
+  // Horizontal + vertical centre, then the two diagonals.
+  ctx.beginPath();
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(w / 2, 0);
+  ctx.lineTo(w / 2, h);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(w, h);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(w, 0);
+  ctx.lineTo(0, h);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+}
+
 export default function HandwritingCanvas({
   onSubmit,
   onCancel,
@@ -19,52 +53,32 @@ export default function HandwritingCanvas({
     return canvas.getContext("2d");
   }, []);
 
-  useEffect(() => {
+  // Size the backing store and paint the guide grid. Uses clientWidth/Height
+  // (the layout size) rather than getBoundingClientRect(): the dialog plays a
+  // popIn scale() animation on mount, and getBoundingClientRect() reports the
+  // mid-animation *scaled* size, which left the backing store too small and
+  // made the grid + strokes jump on 「清除重寫」. The layout size is unaffected
+  // by transforms, so it's already final even during the animation.
+  const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    // Set canvas size for high DPI
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
 
-    // Fill white background
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, rect.width, rect.height);
-
-    // Draw grid lines (like 九宮格)
-    ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-
-    // Horizontal center
-    ctx.beginPath();
-    ctx.moveTo(0, rect.height / 2);
-    ctx.lineTo(rect.width, rect.height / 2);
-    ctx.stroke();
-
-    // Vertical center
-    ctx.beginPath();
-    ctx.moveTo(rect.width / 2, 0);
-    ctx.lineTo(rect.width / 2, rect.height);
-    ctx.stroke();
-
-    // Diagonals
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(rect.width, rect.height);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(rect.width, 0);
-    ctx.lineTo(0, rect.height);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // idempotent: reset + scale to CSS px
+    paintBackground(ctx, w, h);
   }, []);
+
+  useEffect(() => {
+    setupCanvas();
+  }, [setupCanvas]);
 
   const getPos = (
     e: React.MouseEvent | React.TouchEvent
@@ -119,37 +133,10 @@ export default function HandwritingCanvas({
   };
 
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, rect.width * dpr, rect.height * dpr);
-
-    // Redraw grid
-    ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(0, rect.height / 2);
-    ctx.lineTo(rect.width, rect.height / 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(rect.width / 2, 0);
-    ctx.lineTo(rect.width / 2, rect.height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(rect.width, rect.height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(rect.width, 0);
-    ctx.lineTo(0, rect.height);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
+    // Re-run the exact same setup as mount — re-measures the (now settled)
+    // size, resets the transform, and repaints the grid — so clearing can
+    // never drift from the initial layout.
+    setupCanvas();
     setHasDrawn(false);
   };
 
