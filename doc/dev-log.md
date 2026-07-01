@@ -383,9 +383,40 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 10: 修正手寫畫布「清除重寫」格線與筆跡位移
+
+**日期**：2026-06-30
+**觸發**：學生回報——寫字時按下「清除重寫」，手寫區的虛線米字格底稿會位移，手寫筆跡也跟著位移（嚴重問題）。
+
+### 完成項目
+
+1. **手寫畫布尺寸初始化**（`frontend/src/components/HandwritingCanvas.tsx`）
+   - backing store（`canvas.width/height`）改用 `clientWidth/clientHeight`（layout 尺寸）量測，取代 `getBoundingClientRect()`
+   - 以 `ctx.setTransform(dpr,0,0,dpr,0,0)` 取代 `ctx.scale(dpr,dpr)`（冪等，避免重複呼叫累積縮放）
+   - 抽出單一 `paintBackground(ctx,w,h)` 供初始化與清除共用，消除 init／clearCanvas 兩份會分歧的重複格線程式碼
+   - `clearCanvas` 直接呼叫 `setupCanvas()`，保證清除與初始化走同一條路徑、尺寸一致
+
+### 發現與修正
+
+- **問題描述**：按「清除重寫」後，虛線米字格底稿位移、且之後的手寫筆跡與指標位置對不上。
+- **原因**：init `useEffect`（`[]`，mount 時執行）用 `getBoundingClientRect()` 量尺寸設定 backing store，但當下 `.canvas-dialog` 正播 `popIn` 的 `scale(0.9→1)` 進場動畫（`index.css`）。`getBoundingClientRect()` 受 CSS transform 影響，回傳動畫中被縮小的視覺尺寸（約 90%），使 backing store 偏小。動畫結束後 canvas 以全尺寸顯示（瀏覽器放大偏小的 backing store），而 `clearCanvas` 又用 settled 後的全尺寸重畫格線 → 兩套尺寸不匹配 → 格線跳位；且 `getPos` 以全尺寸座標對映到偏小的 backing store → 筆跡偏移。兩症狀同源。
+- **修正**：改用不受 transform 影響的 `clientWidth/clientHeight`（動畫進行中即為最終 layout 尺寸），詳見完成項目。
+- **教訓**：canvas 的 backing store 尺寸量測不可用 `getBoundingClientRect()`（會被祖先的 CSS transform／進場動畫污染），應用 `clientWidth/clientHeight`；初始化與重繪務必共用同一路徑，避免尺寸來源分歧。
+
+### 測試結果
+
+- Root-cause 重現（真實瀏覽器）：popIn 動畫中 `getBoundingClientRect().width=360` vs `clientWidth=400`，證實量測被縮放污染
+- 修正前後不變量對照：舊邏輯清除後 backing `720` ≠ 顯示需求 `800`（位移）；新邏輯 `800===800`（不位移）
+- 真實 app E2E（Playwright + 本機 uvicorn）：導到練習頁 → 點字開畫布 → 畫一筆 → 按清除；不變量 `backing===clientW*dpr` 於清除前後皆成立，截圖確認格線清除前後位置完全一致、筆跡正常清除
+- 線上 production 驗證：revision `rightwrite-00043-fch` E2E 不變量成立 + 截圖確認
+- Build：成功（`tsc -b && vite build`）
+- 部署：成功（Cloud Run `rightwrite-00043-fch`，asia-east1，100% 流量）
+
+---
+
 ## TODO
 
-- [ ] Open PR for the `new-design` branch (Phases 7–9) — already deployed to production as `rightwrite-00042-r42`, but not yet merged to default branch
+- [ ] Open PR for the `new-design` branch (Phases 7–10) — already deployed to production as `rightwrite-00043-fch`, but not yet merged to default branch
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
 - [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
