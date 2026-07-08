@@ -144,47 +144,47 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
             ⚙️
           </button>
         </div>
-      </div>
 
-      {showSettings && (
-        <div className="settings-dropdown">
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={personalization.enabled}
-              onChange={(e) => personalization.setEnabled(e.target.checked)}
-            />
-            <span>個人化記錄</span>
-          </label>
-          <p className="settings-hint">
-            開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
-          </p>
-          {personalization.enabled && (
-            <>
-              <button
-                className="settings-action"
-                onClick={async () => {
-                  const deleted = await purgeOlderThanFourMonths();
-                  alert(`已刪除 ${deleted} 張 4 個月前的手寫圖`);
-                }}
-              >
-                🗑️ 清理 4 個月前資料
-              </button>
-              <button
-                className="settings-action"
-                onClick={() => {
-                  const next = !skipImages;
-                  setSkippingImages(next);
-                  setSkipImagesState(next);
-                  alert(next ? "停止儲存新的手寫圖（既有資料保留）" : "重新開始儲存手寫圖");
-                }}
-              >
-                {skipImages ? "✅ 開始儲存手寫圖" : "🚫 不再儲存手寫圖"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
+        {showSettings && (
+          <div className="settings-dropdown">
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={personalization.enabled}
+                onChange={(e) => personalization.setEnabled(e.target.checked)}
+              />
+              <span>個人化記錄</span>
+            </label>
+            <p className="settings-hint">
+              開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
+            </p>
+            {personalization.enabled && (
+              <>
+                <button
+                  className="settings-action"
+                  onClick={async () => {
+                    const deleted = await purgeOlderThanFourMonths();
+                    alert(`已刪除 ${deleted} 張 4 個月前的手寫圖`);
+                  }}
+                >
+                  🗑️ 清理 4 個月前資料
+                </button>
+                <button
+                  className="settings-action"
+                  onClick={() => {
+                    const next = !skipImages;
+                    setSkippingImages(next);
+                    setSkipImagesState(next);
+                    alert(next ? "停止儲存新的手寫圖（既有資料保留）" : "重新開始儲存手寫圖");
+                  }}
+                >
+                  {skipImages ? "✅ 開始儲存手寫圖" : "🚫 不再儲存手寫圖"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {personalization.enabled && (
         <ProfilePicker />

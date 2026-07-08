@@ -414,6 +414,34 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 11：設定 dropdown 定位跑位修正
+
+**日期**：2026-07-08
+**觸發**：使用者回報——點齒輪展開的「個人化記錄」設定彈窗位置不對，不在齒輪旁邊，跑位到畫面之外。
+
+### 完成項目
+
+1. **設定彈窗 DOM 巢狀修正**（`frontend/src/components/LessonSelector.tsx`）
+   - 將 `{showSettings && <div className="settings-dropdown">…}` 從 `.settings-bar` 的**兄弟節點**改為其**子節點**，使 `.settings-bar`（`position:relative`）成為彈窗的定位包含塊
+   - 彈窗為 `position:absolute`、不參與 flex 排版，移入後不影響標題列 `justify-content:space-between` 佈局
+
+### 發現與修正
+
+- **問題描述**：點齒輪後，`.settings-dropdown` 未出現在齒輪下方，而是掉到畫面外。
+- **原因**：`index.css` 的 `.settings-dropdown` 用 `position:absolute; right:0; top:calc(100% + 6px)`，作者在「學院風重設計」(42d0fc8) 為 `.settings-bar` 加了 `position:relative`，意圖讓彈窗錨定在標題列下方。但 JSX 中彈窗是 `.settings-bar` 的兄弟節點而非子節點，`.settings-bar` 只是兄弟不是祖先，錨不到；`#root`／`.app`／`.selector-container` 皆為 `static`，於是定位包含塊退回 viewport，`top:calc(100% + 6px)` 解析成 `100vh + 6px` → 彈窗掉到畫面下方之外。
+- **為何是回歸**：原始版 (b1966c5) 用固定像素 `right:16px; top:60px` 錨定 viewport，剛好落在頂端齒輪附近而「湊巧正常」；重設計改用百分比 `top` 後才暴露巢狀錯誤。
+- **修正**：把彈窗移入 `.settings-bar` 內，讓既有的 `position:relative` 真正成為定位祖先，`right:0`＝標題列右緣（＝齒輪右緣）、`top:calc(100% + 6px)`＝標題列正下方，回到齒輪下方右對齊。CSS 完全未動。
+- **教訓**：`position:absolute` 的百分比 `top/right` 依賴「最近的已定位**祖先**」，加了 `position:relative` 也要確認目標元素在 DOM 上真的是它的後代，兄弟關係無效。
+
+### 測試結果
+
+- Root-cause 追溯：git 比對確認 `top:calc(100%+6px)` 於 42d0fc8 導入、彈窗自 b1966c5 起即為 `.settings-bar` 兄弟；原始 CSS 為 `right:16px; top:60px`（viewport 錨定）
+- 型別檢查：`tsc --noEmit` 通過（exit 0），JSX 標籤平衡
+- 真實 app E2E（本機 vite:5173 + uvicorn:8000）：點齒輪 → 截圖確認「個人化記錄」彈窗出現在齒輪正下方、右對齊、完整在畫面內
+- Build：未執行完整 `vite build`（僅 `tsc --noEmit`）
+
+---
+
 ## TODO
 
 - [ ] Open PR for the `new-design` branch (Phases 7–10) — already deployed to production as `rightwrite-00043-fch`, but not yet merged to default branch
