@@ -438,7 +438,9 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - Root-cause 追溯：git 比對確認 `top:calc(100%+6px)` 於 42d0fc8 導入、彈窗自 b1966c5 起即為 `.settings-bar` 兄弟；原始 CSS 為 `right:16px; top:60px`（viewport 錨定）
 - 型別檢查：`tsc --noEmit` 通過（exit 0），JSX 標籤平衡
 - 真實 app E2E（本機 vite:5173 + uvicorn:8000）：點齒輪 → 截圖確認「個人化記錄」彈窗出現在齒輪正下方、右對齊、完整在畫面內
-- Build：未執行完整 `vite build`（僅 `tsc --noEmit`）
+- Build：成功（Cloud Build `52467f3c-96e2-4b9c-841e-a087e4708ee6`，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00044-vxn`，asia-east1，100% 流量，取代 `rightwrite-00043-fch`）
+- 線上 production 驗證：導到 `https://rightwrite-532818994163.asia-east1.run.app/` → 點齒輪 → 截圖確認彈窗定位正確、完整在畫面內
 
 ---
 
