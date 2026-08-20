@@ -1,8 +1,14 @@
 """
 Download vocabulary Excel files from pedia.cloud.edu.tw
 for all grades (1-6) and publishers (康軒版, 南一版, 翰林版).
-114 學年度第 2 學期
+
+Usage:
+  python scripts/download_vocab_excel.py            # 114 學年度第 2 學期 (預設)
+  python scripts/download_vocab_excel.py --year 115_1   # 115 學年度第 1 學期
+
+Output dirs: resource/<年級><上|下>-<出版社>/第N課：課名.xlsx
 """
+import argparse
 import os
 import re
 import subprocess
@@ -21,6 +27,7 @@ GRADES = [1, 2, 3, 4, 5, 6]
 GRADE_CN = {1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六"}
 YEAR = "114_2"
 SEMESTER_LABEL = "下"
+SEMESTER_LABELS = {"1": "上", "2": "下"}
 
 
 def curl_get(url: str) -> str:
@@ -63,12 +70,16 @@ def get_lessons(grade: int, press: str) -> list[dict]:
     params = urlencode({"category": "國語", "year": YEAR, "degree": str(grade), "press": press})
     html = curl_get(f"{TEXTWORD_URL}?{params}")
 
-    ids = re.findall(r'class="textname"[^>]*id="(\d+)"', html)
-    names = re.findall(r"<strong>(第[^<]+)</strong>", html)
-
+    # Pair each id with the <strong> title inside the same cell. Units without a
+    # lesson number (e.g. 一上 南一「魔法文字」) come first in the list, so ids and
+    # titles must be read together — matching two separate lists shifts every
+    # later lesson by one.
+    pairs = re.findall(
+        r'class="textname"[^>]*id="(\d+)"[^>]*>\s*<strong>([^<]+)</strong>', html
+    )
     lessons = []
-    for i, text_id in enumerate(ids):
-        name = names[i] if i < len(names) else f"lesson_{i+1}"
+    for i, (text_id, name) in enumerate(pairs):
+        name = name.strip().replace("/", "／") or f"lesson_{i+1}"
         lessons.append({"id": text_id, "name": name})
     return lessons
 
@@ -98,6 +109,14 @@ def download_excel(token: str, text_name_id: str, output_path: str) -> bool:
 
 
 def main():
+    global YEAR, SEMESTER_LABEL
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--year", default=YEAR, help="學年度_學期，例如 114_2 或 115_1")
+    args = parser.parse_args()
+    YEAR = args.year
+    SEMESTER_LABEL = SEMESTER_LABELS[YEAR.split("_")[1]]
+    print(f"Year/semester: {YEAR} ({SEMESTER_LABEL}學期)")
+
     # Clean up old cookie file
     if os.path.exists(COOKIE_FILE):
         os.remove(COOKIE_FILE)

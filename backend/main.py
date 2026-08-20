@@ -299,6 +299,9 @@ def get_grades():
             "label": info["label"],
             "grade": info["grade"],
             "publisher": info["publisher"],
+            "term": info.get("term", "114_2"),
+            "term_label": info.get("term_label", "114下學期"),
+            "semester": info["semester"],
         })
     return {"grades": grades}
 
