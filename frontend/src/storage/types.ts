@@ -1,5 +1,17 @@
 // src/storage/types.ts
 
+/** User-facing practice preferences remembered between visits.
+    Stored per device (localStorage) and, when personalization is on,
+    per profile (IndexedDB) so each child keeps their own setup. */
+export interface Preferences {
+  /** 學年度_學期, e.g. "115_1" (115上學期) or "114_2" (114下學期) */
+  term: string;
+  publisher: string;
+  gradeNum: number;
+  practiceMode: "sentence" | "article";
+  showZhuyin: boolean;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -8,6 +20,8 @@ export interface Profile {
   lastActiveAt: number;
   updatedAt: number;
   syncedAt: number | null;
+  /** Optional: absent on profiles created before preferences existed */
+  prefs?: Partial<Preferences>;
 }
 
 export interface PracticeEvent {

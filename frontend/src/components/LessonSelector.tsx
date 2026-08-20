@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { LessonsResponse, PracticeMode, GradeOption } from "../types";
 import { fetchLessons, fetchGrades } from "../api";
 import { usePersonalization } from "../personalization/PersonalizationContext";
+import { usePreferences } from "../personalization/PreferencesContext";
 import ProfilePicker from "../personalization/ProfilePicker";
 import { purgeOlderThanFourMonths } from "../storage/imageStore";
 import { isSkippingImages, setSkippingImages } from "../storage/skipImagesFlag";
@@ -61,22 +62,43 @@ const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五�
 
 export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
   const personalization = usePersonalization();
+  // 學期 / 出版社 / 年級 / 練習模式 are remembered preferences (device-level,
+  // plus per-profile when personalization is on) — read-through, write-through.
+  const { prefs, setPrefs } = usePreferences();
   const [showSettings, setShowSettings] = useState(false);
   const [skipImages, setSkipImagesState] = useState<boolean>(() => isSkippingImages());
   const [grades, setGrades] = useState<GradeOption[]>([]);
-  const [selectedPublisher, setSelectedPublisher] = useState("康軒版");
-  const [selectedGradeNum, setSelectedGradeNum] = useState(4);
   const [data, setData] = useState<LessonsResponse | null>(null);
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
   const [endLesson, setEndLesson] = useState(6);
-  const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
 
-  // Derive grade_id from publisher + grade selection
+  const selectedPublisher = prefs.publisher;
+  const selectedGradeNum = prefs.gradeNum;
+  const practiceMode: PracticeMode = prefs.practiceMode;
+  const setSelectedPublisher = (publisher: string) => setPrefs({ publisher });
+  const setSelectedGradeNum = (gradeNum: number) => setPrefs({ gradeNum });
+  const setPracticeMode = (practiceMode: PracticeMode) => setPrefs({ practiceMode });
+
+  // Available 學期 options come from the backend; newest first (115上 before 114下).
+  const terms = Array.from(
+    new Map(grades.map((g) => [g.term, g.term_label] as const)).entries(),
+  )
+    .map(([term, label]) => ({ term, label }))
+    .sort((a, b) => (a.term < b.term ? 1 : a.term > b.term ? -1 : 0));
+  const selectedTerm = terms.some((t) => t.term === prefs.term)
+    ? prefs.term
+    : terms[0]?.term ?? prefs.term;
+  const setSelectedTerm = (term: string) => setPrefs({ term });
+
+  // Derive grade_id from term + publisher + grade selection
   const selectedGrade =
     grades.find(
-      (g) => g.publisher === selectedPublisher && g.grade === GRADE_LABELS[selectedGradeNum - 1]
+      (g) =>
+        g.term === selectedTerm &&
+        g.publisher === selectedPublisher &&
+        g.grade === GRADE_LABELS[selectedGradeNum - 1]
     )?.id || "";
 
   // Fetch available grades on mount
@@ -202,6 +224,31 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
           {data ? `${data.publisher} ${data.grade} ${data.semester}` : ""}
         </p>
       </div>
+
+      {/* 學期 selector (radio) */}
+      {terms.length > 0 && (
+        <div className="grade-selector">
+          <h3>學期</h3>
+          <div className="term-radio-group" role="radiogroup" aria-label="學期">
+            {terms.map((t) => (
+              <label
+                key={t.term}
+                className={`term-radio ${selectedTerm === t.term ? "active" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="term"
+                  value={t.term}
+                  checked={selectedTerm === t.term}
+                  onChange={() => setSelectedTerm(t.term)}
+                />
+                <span className="term-radio-dot" aria-hidden="true" />
+                <span className="term-radio-label">{t.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Publisher selector */}
       {grades.length > 1 && (

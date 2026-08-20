@@ -2009,3 +2009,73 @@ body::before {
     right: -4px;
   }
 }
+
+/* 學期 radio group (115上學期 / 114下學期) — same family as .grade-btn */
+.term-radio-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.term-radio {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  user-select: none;
+}
+.term-radio input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.term-radio-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--indigo-line);
+  background: var(--card);
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.2s var(--ease);
+}
+.term-radio-dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--cinnabar);
+  transform: scale(0);
+  transition: transform 0.2s var(--ease);
+}
+.term-radio:hover {
+  border-color: var(--indigo-line);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+.term-radio.active {
+  border-color: var(--indigo);
+  background: var(--indigo-bg);
+  color: var(--ink);
+  font-weight: 700;
+}
+.term-radio.active .term-radio-dot {
+  border-color: var(--cinnabar);
+}
+.term-radio.active .term-radio-dot::after {
+  transform: scale(1);
+}
+.term-radio:focus-within {
+  outline: 2px solid var(--indigo-line);
+  outline-offset: 2px;
+}

@@ -3,6 +3,7 @@ import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
 import { usePersonalization } from "../personalization/PersonalizationContext";
+import { usePreferences } from "../personalization/PreferencesContext";
 import { recordSession } from "../storage/sessionStore";
 import { listByProfile as listCharStats } from "../storage/charStatsStore";
 import { buildWeightedChars } from "../personalization/weights";
@@ -64,7 +65,9 @@ export default function ArticlePractice({
     char: string;
     wrongChar: WrongChar | null; // null = this is a correct char
   } | null>(null);
-  const [showZhuyin, setShowZhuyin] = useState(false);
+  const { prefs, setPrefs } = usePreferences();
+  const showZhuyin = prefs.showZhuyin;
+  const toggleZhuyin = () => setPrefs({ showZhuyin: !showZhuyin });
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
@@ -464,7 +467,7 @@ export default function ArticlePractice({
         </div>
         <button
           className="zhuyin-toggle-btn"
-          onClick={() => setShowZhuyin((v) => !v)}
+          onClick={toggleZhuyin}
         >
           {showZhuyin ? "隱藏注音" : "顯示注音"}
         </button>

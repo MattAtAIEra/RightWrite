@@ -5,6 +5,7 @@ import LessonSelector from "./components/LessonSelector";
 import ArticlePractice from "./components/ArticlePractice";
 import ResultView from "./components/ResultView";
 import { PersonalizationProvider } from "./personalization/PersonalizationContext";
+import { PreferencesProvider } from "./personalization/PreferencesContext";
 import Dashboard from "./dashboard/Dashboard";
 import { purgeOlderThanFourMonths } from "./storage/imageStore";
 
@@ -47,6 +48,7 @@ function App() {
 
   return (
     <PersonalizationProvider>
+      <PreferencesProvider>
       <div className="app">
         {stage === "select" && (
           <LessonSelector onStart={handleStart} onOpenDashboard={() => setStage("dashboard")} />
@@ -68,6 +70,7 @@ function App() {
         )}
         {stage === "dashboard" && <Dashboard onBack={handleBack} />}
       </div>
+      </PreferencesProvider>
     </PersonalizationProvider>
   );
 }
