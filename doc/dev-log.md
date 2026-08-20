@@ -444,6 +444,46 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 12：115 學年度上學期生字表 ＋ 學期 radio ＋ 偏好記憶
+
+**日期**：2026-08-20
+**觸發**：使用者提供 `doc/115上114下學期生字表_大腦與語言實驗室_20260723.xlsx`（115上＋114下、三版本、1–6 年級），要求加入系統、以 radio 讓使用者選「115上學期／114下學期」（預設 115上），並記住上次的選擇（含要不要顯示注音）；有開個人化記錄的小朋友要各自記住。
+
+### 完成項目
+
+1. **115上 生字資料**（`resource/<年級>上-<出版社>/`、`backend/vocab_all.json`）
+   - 實驗室 xlsx 只有生字／課次／同音旁字／雙字詞，沒有課名與例句；先驗證其 114下 資料與現有 pedia.cloud.edu.tw 資料逐課完全吻合，再用 `scripts/download_vocab_excel.py --year 115_1` 從 pedia 抓 115_1 逐課 Excel（課名＋詞語＋例句），共 201 檔、18 套
+   - `scripts/build_vocab_json.py` 支援 `上/下` 目錄；`TERMS` 對照 `上→115_1`、`下→114_2`；metadata 新增 `term`、`term_label`、`semester`
+   - **grade_id 相容**：114下 沿用 `{grade}_{pub}`（使用者 IndexedDB 的 sessions／charStats 以 gradeId 為 key，不能變）；115上 為 `115_1_{grade}_{pub}`
+   - **以實驗室表為權威交叉驗證**全部 36 套：缺字補入、pedia 獨有字移除；一對一差異視同音（袪→祛、賭→睹、壼→壺、始→使、險→顯）連詞語／例句一起改寫，非同音（罩→嬤、盛→耗、澈→激、施→凡）只換生字、詞語保留
+   - `similar_wrong` 優先序：curated → 實驗室「同音旁字」（常見程度 ≥3，最多 3 個）→ pypinyin 同音字補到 4 個。6968 字中 99% 有候選
+2. **後端 API**（`backend/main.py`）：`/api/grades` 回傳 `term`／`term_label`／`semester`，共 36 套；`/api/lessons`、`/api/generate` 直接吃新 id
+3. **學期 radio**（`frontend/src/components/LessonSelector.tsx`、`index.css`）：`學期` 區塊放在出版社之上，選項由 `/api/grades` 的 term 推導、新到舊排序；`.term-radio` 與 `.grade-btn` 同一家族（硃砂圓點＋靛藍邊框）
+4. **偏好記憶**（`storage/prefsStore.ts`、`personalization/PreferencesContext.tsx`、`storage/types.ts`）
+   - `Preferences = { term, publisher, gradeNum, practiceMode, showZhuyin }`，預設 `115_1／康軒版／四年級／句子改錯／不顯示注音`
+   - 兩層：裝置層 `localStorage["rightwrite:prefs"]` 永遠寫入；個人化開啟且有選小朋友時同步寫 `Profile.prefs`（IndexedDB，`updateProfile` patch 擴充）。解析順序 defaults ← device ← profile；切換小朋友從 IndexedDB 重新讀（context 裡的 `activeProfile` 是選取當下快照，不會看到之後的寫入）
+   - `LessonSelector` 的 學期／出版社／年級／練習模式 改為 read-through／write-through 偏好；`ArticlePractice` 的注音開關改讀寫 `prefs.showZhuyin`
+   - `sanitizePrefs` 只收型別正確的欄位，壞掉的 blob 不會污染狀態
+5. **下載腳本修正**（`scripts/download_vocab_excel.py`）：加 `--year`；原本 id 清單與 `<strong>第…課</strong>` 清單分開配對，遇到無課次單元（南一一上首單元「魔法文字」）會整目錄錯位一課，改為同一格內成對擷取
+
+### 發現與修正
+
+- **課名錯位**：重抓後 `一上-南一版/第一課：小船.xlsx` 內容其實是「魔法文字」的 日月山木水人手門；與實驗室表比對才發現。修正配對後重抓，現在 `魔法文字.xlsx` 因無 `第N課` 被 build 略過（實驗室表亦列為無課次特殊單元），其餘逐課吻合
+- **114下 既有資料有 12 處單字差異**（多為異體／誤植：壼、袪、賭）：採實驗室表；同音視為同一詞改寫詞語，非同音保留舊詞語以免造出「口嬤」這種假詞
+- **偏好層次的陷阱**：`PersonalizationContext.activeProfile` 是 `setActiveProfile` 當下從 IndexedDB 讀的快照，若偏好層直接依賴它會在「關掉再開個人化」時回到舊值，所以 `PreferencesProvider` 在 profileId 變化時自行 `getProfile()` 重讀
+- 本機沒有 Gemini 憑證時句子退回 `他學會了X這個詞語。`，屬既有 fallback，production 不受影響
+
+### 測試結果
+
+- 後端：`pytest` 15 通過（新增 `tests/test_terms.py` 5 項：36 套、兩學期各 18、legacy id 仍指 114_2、`/api/grades` term 欄位、115_1 四上康軒 L1＝實驗室表「泳串般姿溜耳鷹滑遨緩陀螺轉躍煩」、115_1 generate 正常）
+- 前端：`vitest` 58/58（新增 prefsStore 5 項、PreferencesContext 4 項）；`tsc -b` 通過；`eslint` 剩原本 5 個既有錯誤，無新增
+- 真實 app E2E（vite:5180 + uvicorn:8000，Chrome）：清空 localStorage → 預設 115上學期、副標「康軒版 四年級 115學年度第1學期」→ 切 114下／翰林／二／短文改錯 → reload 全部保留 → 開始練習 → 顯示注音（72 個 ruby）→ reload 再進入預設即顯示（按鈕為「隱藏注音」）→ 開個人化、新增小明、切 115上 → IndexedDB `profiles[小明].prefs = {term:"115_1"}`
+- Build：成功（Cloud Build `4a3f9c20-da5c-46eb-b22c-0b5fcd4842ba`，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00045-kxv`，asia-east1，100% 流量，取代 `rightwrite-00044-vxn`）
+- 線上 production 驗證：`/api/grades` 36 套（115上學期／114下學期各 18）；`/api/lessons?grade_id=115_1_4_kangxuan` → 115學年度第1學期、12 課、第1課「水陸小高手」；`/api/generate` 115_1 四上康軒 L1–6 → Gemini 造句正常（捐錢／翻山越嶺／谷底／轉身，課名「永遠的馬偕」「攀登生命的高峰」「水陸小高手」）；Chrome 開官網：無偏好時預設 115上學期、副標「康軒版 四年級 115學年度第1學期」、新 bundle `index-9laxi_Dk.js`；切 114下 → reload 仍為 114下 → 切回 115上
+
+---
+
 ## TODO
 
 - [ ] Open PR for the `new-design` branch (Phases 7–10) — already deployed to production as `rightwrite-00043-fch`, but not yet merged to default branch
