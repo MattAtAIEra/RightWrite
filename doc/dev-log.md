@@ -486,13 +486,17 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ## TODO
 
-- [ ] Open PR for the `new-design` branch (Phases 7–10) — already deployed to production as `rightwrite-00043-fch`, but not yet merged to default branch
+- [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
 - [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
 - [x] ~~Enable Cloud Vision API on GCP project~~ — already enabled (`vision.googleapis.com`); the prior note was stale. Vision is now the fallback engine
 - [ ] Manual end-to-end check of personalization on the live site: create profile → practice → 📊 dashboard SVG trend chart
-- [ ] Pre-existing lint debt (5 errors in `ResultView.tsx` / `LessonSelector.tsx` from before personalization) — not gating, clean up when convenient
+- [ ] Pre-existing lint debt (5 errors: `ResultView.tsx` ×3, `LessonSelector.tsx` ×1 `setLessonsLoading` in effect, `ArticlePractice.tsx` ×1 unused `_drawnChar`) — not gating, clean up when convenient
+- [ ] Phase 12 follow-up — 無課次特殊單元不在練習範圍：一上南一「魔法文字」18 字、一上康軒 10 字、六下翰林 35 字（實驗室表課次為空、`build_vocab_json.py` 以 `第N課` 篩檔）。若要納入，需在 build 給它們一個虛擬課次並在 UI 標示
+- [ ] Phase 12 follow-up — 115上 共 3,300 餘新字的 `similar_wrong` 全由「同音旁字 ≥3 → 同音字」自動產生（`curated_similar_wrong.json` 只有 400 字、偏四下康軒），建議抽查幾課確認錯字候選合理，必要時擴充 curated
+- [ ] Phase 12 follow-up — 偏好刻意未記「課次範圍」（每週變動）；若老師反映想記，`Preferences` 加 `startLesson/endLesson` 並依 `total_lessons` clamp 即可
+- [ ] 下學期（115下）資料到時：`python scripts/download_vocab_excel.py --year 115_2` → `build_vocab_json.py` 的 `TERMS` 對照表加一筆（注意 114下 仍要保留 legacy id）→ 重跑 build；前端 radio 會自動多一個選項，`DEFAULT_TERM` 視需要改
 - [ ] Optional follow-up: make `recordSession` atomic for session + charStats (single IDB transaction; images stay best-effort due to async quota check)
 - [ ] Delete merged remote branches `feat/personalization` and `fix/recharts-prod-crash`
 - [x] ~~Parse downloaded Excel files to extend `vocab_data.py` for other grades/publishers~~
