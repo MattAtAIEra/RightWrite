@@ -484,8 +484,45 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 13：辨識降本評估 ＋ 兩段式辨識路由（low thinking → 判錯前升級複核）
+
+**日期**：2026-08-25
+**觸發**：用戶要求試算月成本（3,000 人次 × 100 字辨識），並在成本／品質間找最佳化；期間依用戶要求評估本地小模型可行性
+
+### 完成項目
+
+1. **成本實測與試算**（scratchpad 實驗，未入 repo）
+   - 實測 `gemini-3-flash-preview` 每次辨識：input 固定 1,213 tokens（影像 360/640px 同價，media_resolution 預設 high）＋ thinking 600–1,000（難字可至 2,700+）；30 萬次/月 ≈ US$1,006
+   - `thinking_level="low"`：24 字同圖 A/B → 23/24 答案相同（僅「箍」由對變錯）、平均延遲 7.31s→4.15s、月估 $572
+   - `media_resolution="low"` 否決（複雜字失敗、flash-lite 自信答錯）；「驗證題」提示詞框架否決（嚴格版誤殺正樣本 58–67%、寬容版漏抓形近錯字）
+2. **本地小模型評估（否決，含實測）**
+   - PaddleOCR `chinese_cht_PP-OCRv3_mobile_rec`：AI-FREE 真人手寫 440 張 top-1 24.3%、合成扭曲宋體 8/24（同圖 Gemini 17/24）；閘門模擬誤放 0% 但覆蓋僅 5–12.5%（≈只省 $50/月）→ 淘汰
+   - AI-FREE 資料集僅資料＋教學 notebook、無成品權重；若日後走本地應訓練單字分類器而非微調 OCR 行模型
+   - 實驗紀錄（重生圖＋逐輪 console log）發佈為 Artifact：https://claude.ai/code/artifact/7c7d6fd7-5159-4427-b440-3848afb21049
+3. **兩段式辨識路由**（`backend/main.py`）
+   - `_recognize_with_gemini(image_data_b64, thinking_level=None)`：新增 thinking_level 參數
+   - `/api/recognize`：先跑 `thinking_level="low"`，結果＝預期字即回傳；不符或失敗才以預設 thinking 複核後定判；兩段皆失敗回退 Vision API（原邏輯不變）
+   - 設計理由：寫對（多數流量）走便宜快路；貴的深思只花在「即將判學生寫錯」處，low 偶發誤判（箍→篩）由複核吸收
+
+### 發現與修正
+
+- **背景 shell 的 gcloud 活躍帳號被其他 session 切走**（gemini-marketing-deployer 無權讀 secret）→ 本機起服務時 GEMINI_API_KEY 取值失敗、全部請求落到「？」。修正：取 secret 一律加 `--account=teamfollowme-deployer@…` 明確指定。教訓：gcloud active account 是全域可變狀態，腳本不可依賴
+- AI-FREE zip 檔名為 UTF-8 flag 正常的中文，但 macOS `unzip` 解不了（Illegal byte sequence）；改用 Python zipfile 直讀
+
+### 測試結果
+
+- 本機 E2E（uvicorn:8010，seed 固定合成圖打 `/api/recognize`）：寫對 6/6 走單次 low（2.2–7.5s、conf 0.85）；寫錯形近字 3/3 觸發升級、認出實際的字（力／候／源）並判 False；「箍」品質回收成功（low 誤認 → 升級後判對）
+- Build：成功（Cloud Build，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00046-4s8`，asia-east1，取代 `rightwrite-00045-kxv`）
+- 線上 production 驗證：寫對（配 6.9s／姆 3.1s，True）；寫錯 3/3 升級判 False 並認出實際字；箍 True（1.7s）
+- 成本結論：月估 US$1,006 → 約 $500–650（依升級率；正確書寫佔比越高越省），多數學生等待時間約減半
+
+---
+
 ## TODO
 
+- [ ] Phase 13 follow-up — 上線後以 Cloud Run log 監控「Gemini(escalated)」出現率（＝升級率），一週後回算實際月成本；若升級率異常高，檢查是否 low 模型行為飄移
+- [ ] Phase 13 follow-up — `_recognize_with_gemini` 兩段呼叫目前串行，寫錯情境延遲 9–16s；若體感太慢可考慮 streaming 提示或前端進度動畫
 - [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
