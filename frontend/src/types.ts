@@ -53,5 +53,5 @@ export interface RecognizeResponse {
   confidence: number;
 }
 
-export type AppStage = "select" | "practice" | "result" | "dashboard";
+export type AppStage = "select" | "practice" | "result" | "dashboard" | "stampbook";
 export type PracticeMode = "sentence" | "article";

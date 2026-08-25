@@ -5,6 +5,8 @@ import HandwritingCanvas from "./HandwritingCanvas";
 import { usePersonalization } from "../personalization/PersonalizationContext";
 import { usePreferences } from "../personalization/PreferencesContext";
 import { recordSession } from "../storage/sessionStore";
+import { awardStampsForSession } from "../rewards/awardStamps";
+import type { StampAward } from "../rewards/types";
 import { listByProfile as listCharStats } from "../storage/charStatsStore";
 import { buildWeightedChars } from "../personalization/weights";
 import type { PracticeEvent } from "../storage/types";
@@ -16,7 +18,7 @@ interface Props {
   practiceMode: PracticeMode;
   gradeId: string;
   gradeLabel: string;
-  onFinish: (results: AnswerResult[]) => void;
+  onFinish: (results: AnswerResult[], stampAward?: StampAward | null) => void;
   onBack: () => void;
 }
 
@@ -71,6 +73,7 @@ export default function ArticlePractice({
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
+  const [pendingAward, setPendingAward] = useState<StampAward | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -292,6 +295,7 @@ export default function ArticlePractice({
     }
 
     let needsModal = false;
+    let stampAward: StampAward | null = null;
     if (personalization.enabled && personalization.activeProfile) {
       const events: PracticeEvent[] = allResults.map((r) => ({
         type: r.type,
@@ -317,6 +321,11 @@ export default function ArticlePractice({
           events,
         });
         needsModal = result.quotaState === "block" || result.quotaState === "warn";
+        try {
+          stampAward = await awardStampsForSession(result.session);
+        } catch (err) {
+          console.error("Failed to award stamps", err);
+        }
       } catch (err) {
         console.error("Failed to record session", err);
       }
@@ -326,10 +335,11 @@ export default function ArticlePractice({
       // Store results and show modal; onFinish triggers when modal closes
       setShowQuotaModal(true);
       setPendingResults(allResults);
+      setPendingAward(stampAward);
       return;
     }
 
-    onFinish(allResults);
+    onFinish(allResults, stampAward);
   };
 
   const answeredCount = [...annotations.values()].filter((a) => !a.pending).length;
@@ -508,7 +518,7 @@ export default function ArticlePractice({
             if (pendingResults) {
               const r = pendingResults;
               setPendingResults(null);
-              onFinish(r);
+              onFinish(r, pendingAward);
             }
           }}
         />

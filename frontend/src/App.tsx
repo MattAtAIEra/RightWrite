@@ -7,6 +7,8 @@ import ResultView from "./components/ResultView";
 import { PersonalizationProvider } from "./personalization/PersonalizationContext";
 import { PreferencesProvider } from "./personalization/PreferencesContext";
 import Dashboard from "./dashboard/Dashboard";
+import StampBook from "./rewards/StampBook";
+import type { StampAward } from "./rewards/types";
 import { purgeOlderThanFourMonths } from "./storage/imageStore";
 
 function App() {
@@ -20,6 +22,7 @@ function App() {
   const [gradeId, setGradeId] = useState("grade4");
   const [gradeLabel, setGradeLabel] = useState("");
   const [results, setResults] = useState<AnswerResult[]>([]);
+  const [stampAward, setStampAward] = useState<StampAward | null>(null);
   const [practiceKey, setPracticeKey] = useState(0);
 
   const handleStart = (start: number, end: number, mode: PracticeMode, grade: string, label: string) => {
@@ -31,8 +34,9 @@ function App() {
     setStage("practice");
   };
 
-  const handleFinish = (answerResults: AnswerResult[]) => {
+  const handleFinish = (answerResults: AnswerResult[], award?: StampAward | null) => {
     setResults(answerResults);
+    setStampAward(award ?? null);
     setStage("result");
   };
 
@@ -44,6 +48,7 @@ function App() {
   const handleBack = () => {
     setStage("select");
     setResults([]);
+    setStampAward(null);
   };
 
   return (
@@ -51,7 +56,11 @@ function App() {
       <PreferencesProvider>
       <div className="app">
         {stage === "select" && (
-          <LessonSelector onStart={handleStart} onOpenDashboard={() => setStage("dashboard")} />
+          <LessonSelector
+            onStart={handleStart}
+            onOpenDashboard={() => setStage("dashboard")}
+            onOpenStampBook={() => setStage("stampbook")}
+          />
         )}
         {stage === "practice" && (
           <ArticlePractice
@@ -66,9 +75,10 @@ function App() {
           />
         )}
         {stage === "result" && (
-          <ResultView results={results} onRetry={handleRetry} onBack={handleBack} />
+          <ResultView results={results} stampAward={stampAward} onRetry={handleRetry} onBack={handleBack} />
         )}
         {stage === "dashboard" && <Dashboard onBack={handleBack} />}
+        {stage === "stampbook" && <StampBook onBack={handleBack} />}
       </div>
       </PreferencesProvider>
     </PersonalizationProvider>

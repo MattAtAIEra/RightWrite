@@ -1,9 +1,10 @@
 // src/storage/db.ts
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Profile, Session, CharStat, HandwritingImage } from "./types";
+import type { Stamp, ParentSettings } from "../rewards/types";
 
 export const DB_NAME = "rightwrite-personalization";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export interface RWDBSchema extends DBSchema {
   profiles: {
@@ -35,6 +36,17 @@ export interface RWDBSchema extends DBSchema {
       byCapturedAt: number;
     };
   };
+  stamps: {
+    key: string;
+    value: Stamp;
+    indexes: {
+      byProfile: string;
+    };
+  };
+  parentSettings: {
+    key: string;
+    value: ParentSettings;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<RWDBSchema>> | null = null;
@@ -64,6 +76,14 @@ export function getDB(): Promise<IDBPDatabase<RWDBSchema>> {
           const images = db.createObjectStore("handwritingImages", { keyPath: "id" });
           images.createIndex("byProfile", "profileId");
           images.createIndex("byCapturedAt", "capturedAt");
+        }
+        // v2: 集章與家長設定
+        if (!db.objectStoreNames.contains("stamps")) {
+          const stamps = db.createObjectStore("stamps", { keyPath: "id" });
+          stamps.createIndex("byProfile", "profileId");
+        }
+        if (!db.objectStoreNames.contains("parentSettings")) {
+          db.createObjectStore("parentSettings", { keyPath: "profileId" });
         }
       },
     }).then((db) => {

@@ -1,11 +1,48 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { AnswerResult } from "./ArticlePractice";
 import { recognizeHandwriting } from "../api";
+import StampSeal from "../rewards/StampSeal";
+import { STAMP_LABELS, type StampAward } from "../rewards/types";
 
 interface Props {
   results: AnswerResult[];
+  stampAward?: StampAward | null;
   onRetry: () => void;
   onBack: () => void;
+}
+
+/** 蓋章時刻 — new stamps thump onto the page one by one */
+function StampCelebration({ award, onClose }: { award: StampAward; onClose: () => void }) {
+  const { newStamps, progress, weeklyCount, weeklyGoal } = award;
+  const reward = progress.activeReward;
+  return (
+    <div className="stamp-overlay" role="dialog" aria-label="獲得新印章">
+      <div className="stamp-overlay-card">
+        <h3>蓋章囉！</h3>
+        <div className="stamp-overlay-seals">
+          {newStamps.map((s, i) => (
+            <figure key={s.id} className="stamp-overlay-item" style={{ animationDelay: `${0.35 + i * 0.55}s` }}>
+              <StampSeal type={s.type} size={84} stamping />
+              <figcaption>{STAMP_LABELS[s.type].name}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <p className="stamp-overlay-progress">
+          {reward ? (
+            progress.unredeemed >= reward.targetStamps ? (
+              <>已集滿 <b>{reward.targetStamps}</b> 枚！請家長到集章簿確認兌換「{reward.title}」</>
+            ) : (
+              <>已集 <b>{progress.unredeemed}</b> / {reward.targetStamps} 枚，再 {reward.targetStamps - progress.unredeemed} 枚就能兌換「{reward.title}」</>
+            )
+          ) : (
+            <>已集 <b>{progress.unredeemed}</b> 枚印章</>
+          )}
+          <span className="stamp-overlay-week">本週已練習 {weeklyCount} / {weeklyGoal} 次</span>
+        </p>
+        <button className="stamp-overlay-close" onClick={onClose}>收下印章</button>
+      </div>
+    </div>
+  );
 }
 
 /** Inline practice canvas for 訂正 — write the correct char, then validate via recognition API */
@@ -217,8 +254,9 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
   );
 }
 
-export default function ResultView({ results, onRetry, onBack }: Props) {
+export default function ResultView({ results, stampAward, onRetry, onBack }: Props) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showStamps, setShowStamps] = useState(() => (stampAward?.newStamps.length ?? 0) > 0);
   const [correctionTarget, setCorrectionTarget] = useState<string | null>(null);
 
   const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
@@ -265,6 +303,9 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
   return (
     <div className="result-container">
       {showConfetti && <ConfettiCelebration />}
+      {showStamps && stampAward && (
+        <StampCelebration award={stampAward} onClose={() => setShowStamps(false)} />
+      )}
 
       <div className="result-header">
         <CelebrationStars accuracy={accuracy} />
@@ -300,6 +341,14 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
             <span className="false-alarm-count">，誤判 {falseAlarms.length} 個</span>
           )}
         </div>
+        {stampAward && (
+          <div className="result-week-progress">
+            本週已練習 {stampAward.weeklyCount} / {stampAward.weeklyGoal} 次
+            {stampAward.progress.activeReward && (
+              <>・集章 {stampAward.progress.unredeemed} / {stampAward.progress.activeReward.targetStamps} 枚</>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="result-details">

@@ -6,10 +6,12 @@ import { usePreferences } from "../personalization/PreferencesContext";
 import ProfilePicker from "../personalization/ProfilePicker";
 import { purgeOlderThanFourMonths } from "../storage/imageStore";
 import { isSkippingImages, setSkippingImages } from "../storage/skipImagesFlag";
+import RewardStrip from "../rewards/RewardStrip";
 
 interface Props {
   onStart: (start: number, end: number, mode: PracticeMode, grade: string, gradeLabel: string) => void;
   onOpenDashboard: () => void;
+  onOpenStampBook: () => void;
 }
 
 /** Brand mark: the character 正 ("correct") circled and ticked in red pen —
@@ -60,7 +62,7 @@ function ScholarMark() {
 const PUBLISHERS = ["康軒版", "南一版", "翰林版"];
 const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
 
-export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
+export default function LessonSelector({ onStart, onOpenDashboard, onOpenStampBook }: Props) {
   const personalization = usePersonalization();
   // 學期 / 出版社 / 年級 / 練習模式 are remembered preferences (device-level,
   // plus per-profile when personalization is on) — read-through, write-through.
@@ -217,6 +219,8 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
           👆 請先選擇或新增一位小朋友再開始練習
         </div>
       )}
+
+      <RewardStrip onOpen={onOpenStampBook} />
 
       <div className="selector-header">
         <ScholarMark />
