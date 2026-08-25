@@ -359,17 +359,47 @@ def recognize_handwriting(req: RecognizeRequest):
     """
     expected = req.expected_char
 
-    # Primary: Gemini multimodal handwriting recognition
+    # Primary: Gemini multimodal handwriting recognition, two-stage routing.
+    # Stage 1 runs with thinking_level="low" — a fraction of the cost/latency,
+    # and it agrees with the default-thinking output on nearly every input.
+    # Only when stage 1 would mark the answer wrong (mismatch or failure) do we
+    # escalate to a default-thinking pass, so the expensive call is spent
+    # exactly where a false "wrong" verdict would hurt the student.
+    recognized = None
+    confidence = 0.0
     try:
-        recognized, confidence = _recognize_with_gemini(req.image_data)
-        logger.info("Gemini recognized: %s (expected: %s)", recognized, expected)
+        recognized, confidence = _recognize_with_gemini(
+            req.image_data, thinking_level="low"
+        )
+        logger.info("Gemini(low) recognized: %s (expected: %s)", recognized, expected)
+        if recognized == expected:
+            return RecognizeResponse(
+                recognized_char=recognized,
+                is_correct=True,
+                confidence=confidence,
+            )
+    except Exception as e:
+        logger.warning("Gemini low-thinking pass failed: %s", e)
+
+    # Stage 2: verdict would be "wrong" — double-check with full thinking.
+    try:
+        recognized2, confidence2 = _recognize_with_gemini(req.image_data)
+        logger.info(
+            "Gemini(escalated) recognized: %s (expected: %s)", recognized2, expected
+        )
         return RecognizeResponse(
-            recognized_char=recognized,
-            is_correct=recognized == expected,
-            confidence=confidence,
+            recognized_char=recognized2,
+            is_correct=recognized2 == expected,
+            confidence=confidence2,
         )
     except Exception as e:
         logger.warning("Gemini recognition failed: %s", e, exc_info=True)
+        if recognized is not None:
+            return RecognizeResponse(
+                recognized_char=recognized,
+                is_correct=recognized == expected,
+                confidence=confidence,
+            )
 
     # Fallback: Google Cloud Vision API
     try:
@@ -453,17 +483,30 @@ def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
     raise ValueError("No text recognized")
 
 
-def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
-    """Use Gemini Vision to recognize a handwritten Chinese character."""
+def _recognize_with_gemini(
+    image_data_b64: str, thinking_level: str | None = None
+) -> tuple[str, float]:
+    """Use Gemini Vision to recognize a handwritten Chinese character.
+
+    thinking_level="low" gives a much cheaper/faster pass; None keeps the
+    model's default (deep) thinking.
+    """
     from google import genai
     from google.genai import types
 
     if "," in image_data_b64:
         image_data_b64 = image_data_b64.split(",", 1)[1]
 
+    config = None
+    if thinking_level:
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=thinking_level)
+        )
+
     client = genai.Client()
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
+        config=config,
         contents=[
             types.Part.from_bytes(
                 data=base64.b64decode(image_data_b64),
