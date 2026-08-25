@@ -519,8 +519,47 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 14：集章簿——學習目標、硃砂印章與家長獎品兌換（Phase A＋B）
+
+**日期**：2026-08-25
+**觸發**：用戶要求實作「學生／家長目標設定＋目標達成率」；經 AskUserQuestion 決策：A＋B 一次做、家長區用 4 位數 PIN
+
+### 完成項目
+
+1. **資料層**（IndexedDB v2）
+   - `storage/db.ts`：DB_VERSION 1→2，新增 `stamps`（byProfile index）與 `parentSettings` 兩個 store，upgrade 沿用 contains-check 冪等模式
+   - `storage/stampStore.ts`：印章 CRUD、`redeemStamps` 消耗最舊 N 枚（集點卡歸零重來，紀錄保留）
+   - `storage/parentStore.ts`：家長設定（週目標／獎品清單）＋ PIN（SHA-256(pin:profileId)，定位為 speed bump 非安全邊界）
+2. **規則引擎**（`rewards/stampEngine.ts`，純函式）
+   - 五種印章：首練印／滿分印（全對且題數>0）／週達印（ISO 週、本地時區、週一起算）／連三印（連續三天有練習）／百字印（累計訂正每滿 100，落後里程碑一次補齊）
+   - 以 (type, scopeKey) 去重；`rewards/weekKey.ts` 提供 ISO 週鍵
+   - `rewards/awardStamps.ts`：掛在 `recordSession` 成功之後（ArticlePractice），透過 `onFinish(results, stampAward)` 傳遞
+3. **UI**（墨韻硃砂學院風，印章＝硃砂印視覺）
+   - `rewards/StampSeal.tsx`：CSS 硃砂印章元件（stamp-thump 蓋章動畫、已兌換淡化）
+   - ResultView：新章「蓋章囉！」overlay（逐枚蓋下）＋本週/集章進度列
+   - `rewards/RewardStrip.tsx`：首頁進度條（本週 X/Y 次＋集章 X/N 枚換「獎品」），點擊進集章簿
+   - `rewards/StampBook.tsx`：集點卡（N 格 punch grid）／印章牆／兌換紀錄／家長區（PIN 設定→輸入→開啟；忘記 PIN 兩段式重設，獎品設定保留；集滿才可按確認兌換）
+   - App 新增 stage `"stampbook"`；個人化關閉或無 profile 時整套 UI 隱藏
+4. **測試**：`rewards/__tests__/stampEngine.test.ts`（11 項：五規則＋去重＋週界）、`stampStores.test.ts`（6 項：最舊優先消耗、PIN roundtrip、activeReward）；`db.test.ts` 店數 4→6 更新
+
+### 發現與修正
+
+- **測試資料踩到 ISO 週界**：T0=週二，往前推 2 天落在上一 ISO 週（週日屬 W34），週達印測試失敗——引擎行為正確、測試資料改為同週三天。連帶確認「連三印」跨週合法、「週達印」嚴格按 ISO 週
+- 本機 :8000 被其他專案服務佔用且 Vite proxy 寫死 :8000 → E2E 改打 `backend/static` 產物直出的 :8010（production-like，反而更接近線上組態）
+
+### 測試結果
+
+- 前端：`vitest` 74/74（新增 17 項）；`tsc -b`＋`vite build` 通過；`eslint` 維持既有 5 筆債、無新增
+- 真實瀏覽器 E2E（Chrome × :8010）：開個人化→建「測試豆」→句子改錯直接交卷→「蓋章囉！」首練印動畫＋已集 1 枚＋本週 1/3→首頁進度條即時更新→集章簿設 PIN 1234→設獎品「去動物園玩一天」×10→集點卡第 1 格已蓋、還差 9 枚、兌換鈕正確鎖定→reload 後全部持久（v1→v2 migration 正常）
+- Build/部署：成功（Cloud Run `rightwrite-00047-vv8`，asia-east1，取代 00046-4s8）；線上驗證：正式站開個人化→建「小豆」→集章進度條正常顯示（本週 0/3、已集 0 枚），IndexedDB v2 於 production 正常
+
+---
+
 ## TODO
 
+- [ ] Phase 14 follow-up — 兌換後自動建議下一張集點卡（目前兌換後需家長重新填寫獎品；可加「再來一張」快速鍵帶入上次設定）
+- [ ] Phase 14 follow-up — 集章資料 local-first：換裝置／清瀏覽器會歸零；若家長反映，屆時併入跨裝置同步（Phase C，需後端）
+- [ ] Phase 14 follow-up — 滿分印目前每次滿分都蓋（scope=sessionId），觀察是否被「刷短範圍」灌水；必要時改每日上限
 - [ ] Phase 13 follow-up — 上線後以 Cloud Run log 監控「Gemini(escalated)」出現率（＝升級率），一週後回算實際月成本；若升級率異常高，檢查是否 low 模型行為飄移
 - [ ] Phase 13 follow-up — `_recognize_with_gemini` 兩段呼叫目前串行，寫錯情境延遲 9–16s；若體感太慢可考慮 streaming 提示或前端進度動畫
 - [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
