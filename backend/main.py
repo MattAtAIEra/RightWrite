@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from vocab_data import (
     get_grade_registry,
     get_grade_info,
+    get_known_characters,
     get_vocab_data,
     get_all_characters_in_range,
     get_all_compounds_in_range,
@@ -241,24 +242,28 @@ def _pick_variant(
 ) -> tuple[int, str, str]:
     """替一個詞挑「哪個字寫錯、錯成哪個字」。
 
-    先按讀音分級(同音 > 同音不同調 > 不同音),同一級之內再優先挑最近沒用
-    過的組合。同一個詞本來就有好幾種考法(「環境」可以錯「環」也可以錯
+    先按讀音分級(同音 > 同音不同調 > 不同音),同一級之內讓課本出現過的字
+    優先(不然會挑到「婞」這種小朋友沒看過的同音字),再優先挑最近沒用過的
+    組合。同一個詞本來就有好幾種考法(「環境」可以錯「環」也可以錯
     「境」,「境」又可以錯成敬／靜／竟),所以就算詞重複了,題目還是不一樣。
     """
     word = comp_info["word"]
-    by_tier: dict[int, list[tuple[int, str, str]]] = {}
+    known = get_known_characters()
+    groups: dict[tuple[int, int], list[tuple[int, str, str]]] = {}
     for idx, ch in comp_info["_swappable"]:
         for wrong in char_lookup[ch]:
-            by_tier.setdefault(_sound_tier(ch, wrong), []).append((idx, ch, wrong))
+            key = (_sound_tier(ch, wrong), 0 if wrong in known else 1)
+            groups.setdefault(key, []).append((idx, ch, wrong))
 
-    # 只有在整個詞連一個同音/近音錯字都湊不出來時,才退而用讀音不同的
-    tiers = [t for t in sorted(by_tier) if t <= 1] or sorted(by_tier)
-    for tier in tiers:
-        unused = [o for o in by_tier[tier] if f"{word}|{o[1]}|{o[2]}" not in recent_variants]
+    # 讀音相近排第一順位,同一級之內再讓課本出現過的字排前面。
+    # 只有在整個詞連一個同音/近音錯字都湊不出來時,才退而用讀音不同的。
+    order = [k for k in sorted(groups) if k[0] <= 1] or sorted(groups)
+    for key in order:
+        unused = [o for o in groups[key] if f"{word}|{o[1]}|{o[2]}" not in recent_variants]
         if unused:
             return random.choice(unused)
-    # 該考的都考過了 → 回到讀音最接近的那一組重來
-    return random.choice(by_tier[tiers[0]])
+    # 該考的都考過了 → 回到最合適的那一組重來
+    return random.choice(groups[order[0]])
 
 
 # 一次最多出 8 題;題庫至少要有它的兩倍,下一次才有足夠的新題目可以換。

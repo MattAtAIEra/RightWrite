@@ -144,3 +144,17 @@ def test_generated_wrong_chars_sound_like_the_correct_ones():
         ]
     assert sum(1 for t in tiers if t == 2) / len(tiers) < 0.05
     assert sum(1 for t in tiers if t == 0) / len(tiers) > 0.8
+
+
+def test_prefers_a_character_kids_have_actually_seen():
+    comp = {"word": "幸福", "_swappable": [(0, "幸")]}
+    lookup = {"幸": ["婞", "姓"]}  # 兩個都跟「幸」同音,但「婞」課本從來不教
+    for _ in range(20):
+        assert _pick_variant(comp, lookup, set())[2] == "姓"
+
+
+def test_sound_still_wins_over_familiarity():
+    comp = {"word": "耳朵", "_swappable": [(0, "耳")]}
+    lookup = {"耳": ["聞", "邇"]}  # 聞很常見但不同音,邇 ěr 冷僻卻同音
+    for _ in range(20):
+        assert _pick_variant(comp, lookup, set())[2] == "邇"
