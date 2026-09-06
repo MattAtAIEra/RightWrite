@@ -53,20 +53,20 @@ function run(session: Session, all: Session[], existing: Stamp[] = [], goal = 3)
 }
 
 describe("stampEngine", () => {
-  it("first session earns 首練印", () => {
+  it("first session earns 新手章", () => {
     const s = mkSession({ startedAt: T0 });
     const out = run(s, [s]);
     expect(out.some((x) => x.type === "first_session")).toBe(true);
   });
 
-  it("non-first session does not earn 首練印", () => {
+  it("non-first session does not earn 新手章", () => {
     const s1 = mkSession({ startedAt: T0 - 86_400_000 * 30 });
     const s2 = mkSession({ startedAt: T0 });
     const out = run(s2, [s1, s2]);
     expect(out.some((x) => x.type === "first_session")).toBe(false);
   });
 
-  it("perfect session earns 滿分印, scoped per session", () => {
+  it("perfect session earns 滿分章, scoped per session", () => {
     const s = mkSession({ startedAt: T0, summary: { accuracy: 1, totalWrong: 5 } as Session["summary"] });
     const out = run(s, [s]);
     const perfect = out.find((x) => x.type === "perfect");
@@ -78,7 +78,7 @@ describe("stampEngine", () => {
     expect(run(s, [s]).some((x) => x.type === "perfect")).toBe(false);
   });
 
-  it("weekly goal met earns 週達印 once per week", () => {
+  it("weekly goal met earns 本週達標章 once per week", () => {
     // T0 is Tuesday; Mon/Tue/Tue-evening keep all three inside the same ISO week
     const week = [0, 6, 24].map((h) => mkSession({ startedAt: T0 - h * 3_600_000 }));
     const out = run(week[0], week, [], 3);
@@ -90,12 +90,12 @@ describe("stampEngine", () => {
     expect(again.some((x) => x.type === "weekly_goal")).toBe(false);
   });
 
-  it("below weekly goal earns no 週達印", () => {
+  it("below weekly goal earns no 本週達標章", () => {
     const s = mkSession({ startedAt: T0 });
     expect(run(s, [s], [], 3).some((x) => x.type === "weekly_goal")).toBe(false);
   });
 
-  it("three consecutive days earn 連三印 scoped to day 3", () => {
+  it("three consecutive days earn 連三天章 scoped to day 3", () => {
     const days = [2, 1, 0].map((d) => mkSession({ startedAt: T0 - d * 86_400_000 }));
     const out = run(days[2], days, [], 99);
     const streak = out.find((x) => x.type === "streak3");

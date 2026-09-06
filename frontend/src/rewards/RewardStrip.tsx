@@ -1,5 +1,5 @@
 // src/rewards/RewardStrip.tsx
-// 首頁的集章進度條:本週練習進度 ＋ 獎品集章進度,點擊開集章簿。
+// 首頁的集章進度條:本週練習進度 ＋ 獎品集章進度,點擊開印章收集簿。
 
 import { useEffect, useState } from "react";
 import { usePersonalization } from "../personalization/PersonalizationContext";
@@ -54,22 +54,22 @@ export default function RewardStrip({ onOpen }: { onOpen: () => void }) {
     : 0;
 
   return (
-    <button className="reward-strip" onClick={onOpen} aria-label="打開集章簿">
+    <button className="reward-strip" onClick={onOpen} aria-label="打開印章收集簿">
       <span className="reward-strip-seal" aria-hidden="true">章</span>
       <span className="reward-strip-body">
         <span className="reward-strip-line">
-          本週練習 {data.weeklyCount}/{data.weeklyGoal} 次
+          這禮拜練習 {data.weeklyCount}/{data.weeklyGoal} 次
           <span className="reward-strip-bar"><i style={{ width: `${weekPct}%` }} /></span>
         </span>
         {data.reward ? (
           <span className="reward-strip-line">
             {data.unredeemed >= data.reward.targetStamps
-              ? `集滿囉！可以兌換「${data.reward.title}」`
-              : `集章 ${data.unredeemed}/${data.reward.targetStamps} 枚換「${data.reward.title}」`}
+              ? `集滿囉！可以換「${data.reward.title}」了`
+              : `已經有 ${data.unredeemed}/${data.reward.targetStamps} 個章，換「${data.reward.title}」`}
             <span className="reward-strip-bar reward"><i style={{ width: `${rewardPct}%` }} /></span>
           </span>
         ) : (
-          <span className="reward-strip-line faint">已集 {data.unredeemed} 枚印章・點我看集章簿</span>
+          <span className="reward-strip-line faint">已經有 {data.unredeemed} 個章・點我看印章收集簿</span>
         )}
       </span>
       <span className="reward-strip-arrow" aria-hidden="true">›</span>

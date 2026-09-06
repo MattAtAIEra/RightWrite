@@ -9,6 +9,7 @@ import { awardStampsForSession } from "../rewards/awardStamps";
 import type { StampAward } from "../rewards/types";
 import { listByProfile as listCharStats } from "../storage/charStatsStore";
 import { buildWeightedChars } from "../personalization/weights";
+import { loadRecentQuestions, pushRound } from "../storage/recentQuestionsStore";
 import type { PracticeEvent } from "../storage/types";
 import QuotaModal from "../personalization/QuotaModal";
 
@@ -86,9 +87,19 @@ export default function ArticlePractice({
         const built = buildWeightedChars(gradeStats);
         if (Object.keys(built).length > 0) weightedChars = built;
       }
+      const recentKey = {
+        profileId: personalization.activeProfile?.id ?? null,
+        gradeId,
+        startLesson,
+        endLesson,
+      };
       try {
-        const article = await generateArticle(startLesson, endLesson, practiceMode, gradeId, weightedChars);
+        const article = await generateArticle(
+          startLesson, endLesson, practiceMode, gradeId, weightedChars,
+          loadRecentQuestions(recentKey),
+        );
         setArticle(article);
+        pushRound(recentKey, article.wrong_chars);
       } catch {
         alert("生成文章失敗，請重試");
       } finally {

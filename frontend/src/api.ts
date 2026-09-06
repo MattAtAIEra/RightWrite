@@ -20,6 +20,8 @@ export async function generateArticle(
   mode: string = "article",
   gradeId: string = "grade4",
   weightedChars?: Record<string, number>,
+  /** 最近幾次出過的題目,讓後端避開,同一課連做兩次才不會拿到同一批題目 */
+  recent?: { rounds: string[][]; variants: string[] },
 ): Promise<ArticleResponse> {
   const body: Record<string, unknown> = {
     start_lesson: startLesson,
@@ -29,6 +31,10 @@ export async function generateArticle(
   };
   if (weightedChars && Object.keys(weightedChars).length > 0) {
     body.weighted_chars = weightedChars;
+  }
+  if (recent && recent.rounds.length > 0) {
+    body.recent_rounds = recent.rounds;
+    body.recent_variants = recent.variants;
   }
   const res = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",

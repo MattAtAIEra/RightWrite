@@ -40,22 +40,22 @@ export function evaluateStamps(input: EvaluateInput): NewStamp[] {
     }
   };
 
-  // 首練印
+  // 新手章
   if (allSessions.length === 1) add("first_session", "first");
 
-  // 滿分印:全對且題目數 > 0(空練習不算)
+  // 滿分章:全對且題目數 > 0(空練習不算)
   if (session.summary.totalWrong > 0 && session.summary.accuracy === 1) {
     add("perfect", session.id);
   }
 
-  // 週達印:本週(session 所在週)練習次數達標
+  // 本週達標章:本週(session 所在週)練習次數達標
   const wk = weekKey(session.startedAt);
   const weekCount = allSessions.filter((s) => weekKey(s.startedAt) === wk).length;
   if (weeklySessionGoal > 0 && weekCount >= weeklySessionGoal) {
     add("weekly_goal", wk, null);
   }
 
-  // 連三印:今天、昨天、前天都有練習。scopeKey 取「第三天」的日期,
+  // 連三天章:今天、昨天、前天都有練習。scopeKey 取「第三天」的日期,
   // 因此連續第 4、5 天各自再形成一組新的三連(4-3-2、5-4-3)可再蓋章。
   const days = new Set(allSessions.map((s) => dayKey(s.startedAt)));
   const today = dayKey(session.startedAt);
@@ -63,7 +63,7 @@ export function evaluateStamps(input: EvaluateInput): NewStamp[] {
     add("streak3", today, null);
   }
 
-  // 百字印:累計訂正字數每滿 100 蓋一枚(一次補齊落後的里程碑)
+  // 一百字章:累計訂正字數每滿 100 蓋一枚(一次補齊落後的里程碑)
   const totalChars = allSessions.reduce((sum, s) => sum + charsOf(s), 0);
   for (let milestone = 100; milestone <= totalChars; milestone += 100) {
     add("chars100", String(milestone), null);

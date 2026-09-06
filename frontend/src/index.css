@@ -2081,7 +2081,7 @@ body::before {
 }
 
 /* ============================================================
-   集章簿(stamps & rewards)
+   印章收集簿(stamps & rewards)
    ============================================================ */
 
 .stamp-seal {
@@ -2269,7 +2269,7 @@ body::before {
 .reward-strip-bar.reward i { background: var(--cinnabar); }
 .reward-strip-arrow { color: var(--ink-faint); font-size: 1.3rem; }
 
-/* --- 集章簿頁 --- */
+/* --- 印章收集簿頁 --- */
 .stampbook-container {
   max-width: 720px;
   margin: 0 auto;

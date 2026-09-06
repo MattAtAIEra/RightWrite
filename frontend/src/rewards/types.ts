@@ -2,11 +2,11 @@
 
 /** 印章種類 — each maps to one automatic rule in stampEngine.ts */
 export type StampType =
-  | "first_session" // 首練印：第一次完成練習
-  | "perfect"       // 滿分印:單次練習 100%
-  | "weekly_goal"   // 週達印:本週練習次數達到家長設定的目標
-  | "streak3"       // 連三印:連續三天都有練習
-  | "chars100";     // 百字印:累計訂正字數每滿 100
+  | "first_session" // 新手章：第一次完成練習
+  | "perfect"       // 滿分章:單次練習 100%
+  | "weekly_goal"   // 本週達標章:本週練習次數達到家長設定的目標
+  | "streak3"       // 連三天章:連續三天都有練習
+  | "chars100";     // 一百字章:累計訂正字數每滿 100
 
 export interface Stamp {
   id: string;
@@ -37,7 +37,7 @@ export interface ParentSettings {
   profileId: string;
   /** SHA-256(pin + profileId) hex;null = 尚未設定 PIN */
   pinHash: string | null;
-  /** 每週練習次數目標(週達印門檻) */
+  /** 每週練習次數目標(本週達標章門檻) */
   weeklySessionGoal: number;
   rewards: RewardConfig[];
   updatedAt: number;
@@ -47,11 +47,11 @@ export interface ParentSettings {
 export const DEFAULT_WEEKLY_GOAL = 3;
 
 export const STAMP_LABELS: Record<StampType, { seal: string; name: string; describe: string }> = {
-  first_session: { seal: "首練", name: "首練印", describe: "完成第一次練習" },
-  perfect: { seal: "滿分", name: "滿分印", describe: "單次練習全對" },
-  weekly_goal: { seal: "週達", name: "週達印", describe: "本週練習次數達標" },
-  streak3: { seal: "連三", name: "連三印", describe: "連續三天都有練習" },
-  chars100: { seal: "百字", name: "百字印", describe: "累計訂正滿一百字" },
+  first_session: { seal: "新手", name: "新手章", describe: "做完第一次練習" },
+  perfect: { seal: "滿分", name: "滿分章", describe: "這一次全部答對" },
+  weekly_goal: { seal: "達標", name: "本週達標章", describe: "這禮拜練習次數到了" },
+  streak3: { seal: "連三", name: "連三天章", describe: "連續三天都有練習" },
+  chars100: { seal: "百字", name: "一百字章", describe: "訂正的字加起來滿一百個" },
 };
 
 /** 未兌換印章數 + 進行中的獎品,for progress UI */

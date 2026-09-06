@@ -30,14 +30,14 @@ function StampCelebration({ award, onClose }: { award: StampAward; onClose: () =
         <p className="stamp-overlay-progress">
           {reward ? (
             progress.unredeemed >= reward.targetStamps ? (
-              <>已集滿 <b>{reward.targetStamps}</b> 枚！請家長到集章簿確認兌換「{reward.title}」</>
+              <>已經集滿 <b>{reward.targetStamps}</b> 個章！請爸爸媽媽到印章收集簿幫你換「{reward.title}」</>
             ) : (
-              <>已集 <b>{progress.unredeemed}</b> / {reward.targetStamps} 枚，再 {reward.targetStamps - progress.unredeemed} 枚就能兌換「{reward.title}」</>
+              <>已經有 <b>{progress.unredeemed}</b> / {reward.targetStamps} 個章，再 {reward.targetStamps - progress.unredeemed} 個就能換「{reward.title}」</>
             )
           ) : (
-            <>已集 <b>{progress.unredeemed}</b> 枚印章</>
+            <>已經有 <b>{progress.unredeemed}</b> 個章</>
           )}
-          <span className="stamp-overlay-week">本週已練習 {weeklyCount} / {weeklyGoal} 次</span>
+          <span className="stamp-overlay-week">這禮拜已經練習 {weeklyCount} / {weeklyGoal} 次</span>
         </p>
         <button className="stamp-overlay-close" onClick={onClose}>收下印章</button>
       </div>
@@ -345,7 +345,7 @@ export default function ResultView({ results, stampAward, onRetry, onBack }: Pro
           <div className="result-week-progress">
             本週已練習 {stampAward.weeklyCount} / {stampAward.weeklyGoal} 次
             {stampAward.progress.activeReward && (
-              <>・集章 {stampAward.progress.unredeemed} / {stampAward.progress.activeReward.targetStamps} 枚</>
+              <>・集章 {stampAward.progress.unredeemed} / {stampAward.progress.activeReward.targetStamps} 個</>
             )}
           </div>
         )}

@@ -1,5 +1,5 @@
 // src/rewards/StampBook.tsx
-// 集章簿:小朋友看進度與印章;家長經 PIN 進入設定目標、獎品與確認兌換。
+// 印章收集簿:小朋友看進度與印章;家長經 PIN 進入設定目標、獎品與確認兌換。
 
 import { useCallback, useEffect, useState } from "react";
 import { usePersonalization } from "../personalization/PersonalizationContext";
@@ -22,7 +22,7 @@ type GateState = "closed" | "setup" | "enter" | "open";
 
 function fmtDate(ts: number): string {
   const d = new Date(ts);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
 export default function StampBook({ onBack }: { onBack: () => void }) {
@@ -166,7 +166,7 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
     <div className="stampbook-container">
       <div className="dashboard-header">
         <button className="back-btn" onClick={onBack}>← 返回</button>
-        <h2>{activeProfile.emoji} {activeProfile.name} 的集章簿</h2>
+        <h2>{activeProfile.emoji} {activeProfile.name} 的印章收集簿</h2>
         {profiles.length > 1 && (
           <select
             value={activeProfile.id}
@@ -182,11 +182,11 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
 
       {/* 集點卡 */}
       <section className="stampbook-card">
-        <h3>集點卡</h3>
+        <h3>我要換的獎品</h3>
         {reward ? (
           <>
             <p className="stampbook-reward-line">
-              集滿 <b>{reward.targetStamps}</b> 枚兌換:<b>{reward.title}</b>
+              集滿 <b>{reward.targetStamps}</b> 個章,就可以換:<b>{reward.title}</b>
             </p>
             <div className="punch-grid">
               {Array.from({ length: reward.targetStamps }, (_, i) => (
@@ -200,22 +200,22 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
               ))}
             </div>
             {redeemable ? (
-              <p className="stampbook-full">集滿囉!請家長按下方「家長設定」確認兌換 🎁</p>
+              <p className="stampbook-full">集滿囉!請爸爸媽媽到下面的「爸爸媽媽專區」幫你換 🎁</p>
             ) : (
-              <p className="stampbook-remaining">還差 {reward.targetStamps - unredeemed} 枚,加油!</p>
+              <p className="stampbook-remaining">還差 {reward.targetStamps - unredeemed} 個章,加油!</p>
             )}
           </>
         ) : (
-          <p className="stampbook-remaining">還沒有設定獎品——請家長到下方「家長設定」填寫。目前已集 {unredeemed} 枚。</p>
+          <p className="stampbook-remaining">還沒有獎品喔——請爸爸媽媽到下面的「爸爸媽媽專區」寫一個。你現在已經有 {unredeemed} 個章。</p>
         )}
-        <p className="stampbook-week">本週已練習 {weeklyCount} / {settings.weeklySessionGoal} 次</p>
+        <p className="stampbook-week">這禮拜已經練習 {weeklyCount} 次,目標 {settings.weeklySessionGoal} 次</p>
       </section>
 
       {/* 我的印章 */}
       <section className="stampbook-card">
-        <h3>我的印章({stamps.length})</h3>
+        <h3>我蓋到的章(共 {stamps.length} 個)</h3>
         {stamps.length === 0 ? (
-          <p className="stampbook-remaining">完成練習就會得到第一枚「首練印」!</p>
+          <p className="stampbook-remaining">做完一次練習,就會拿到第一個「新手章」!</p>
         ) : (
           <div className="stamp-grid">
             {stamps.map((s) => (
@@ -223,7 +223,7 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
                 <StampSeal type={s.type} size={56} spent={s.redeemedRewardId !== null} />
                 <figcaption>
                   {STAMP_LABELS[s.type].name}
-                  <small>{fmtDate(s.earnedAt)}{s.redeemedRewardId ? "・已兌換" : ""}</small>
+                  <small>{fmtDate(s.earnedAt)}蓋的{s.redeemedRewardId ? "・換過了" : ""}</small>
                 </figcaption>
               </figure>
             ))}
@@ -234,11 +234,11 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
       {/* 兌換紀錄 */}
       {history.length > 0 && (
         <section className="stampbook-card">
-          <h3>兌換紀錄</h3>
+          <h3>換過的獎品</h3>
           <ul className="redeem-history">
             {history.map((r) => (
               <li key={r.id}>
-                <b>{r.title}</b>({r.targetStamps} 枚)——{fmtDate(r.redeemedAt!)} 兌換
+                <b>{r.title}</b>(用了 {r.targetStamps} 個章)——{fmtDate(r.redeemedAt!)} 換的
               </li>
             ))}
           </ul>
@@ -247,16 +247,16 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
 
       {/* 家長區 */}
       <section className="stampbook-card parent-zone">
-        <h3>家長設定</h3>
+        <h3>爸爸媽媽專區</h3>
         {gate === "closed" && (
           <button className="parent-open-btn" onClick={openParentZone}>
-            🔒 {settings.pinHash ? "輸入 PIN 進入" : "首次使用:設定家長 PIN"}
+            🔒 {settings.pinHash ? "輸入 PIN 進入" : "第一次使用:先設一組家長 PIN"}
           </button>
         )}
 
         {gate === "setup" && (
           <div className="pin-form">
-            <p>設定 4 位數家長 PIN(之後進入家長設定都需要輸入):</p>
+            <p>設定 4 位數家長 PIN(之後要進來都得輸入):</p>
             <input
               type="password" inputMode="numeric" maxLength={4} placeholder="PIN"
               value={pinInput} onChange={(e) => setPinInput(e.target.value)}
@@ -291,21 +291,21 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
         {gate === "open" && (
           <div className="parent-panel">
             <label className="parent-field">
-              每週練習目標(次)
+              一個禮拜要練習幾次
               <input
                 type="number" min={1} max={14} value={goalDraft}
                 onChange={(e) => setGoalDraft(Math.max(1, Math.min(14, Number(e.target.value) || 1)))}
               />
             </label>
             <label className="parent-field">
-              獎品內容
+              集滿要換什麼獎品
               <input
                 type="text" maxLength={30} placeholder="例:去動物園玩一天"
                 value={rewardTitle} onChange={(e) => setRewardTitle(e.target.value)}
               />
             </label>
             <label className="parent-field">
-              需要集滿(枚)
+              要集滿幾個章
               <input
                 type="number" min={1} max={60} value={rewardTarget}
                 onChange={(e) => setRewardTarget(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
@@ -322,13 +322,13 @@ export default function StampBook({ onBack }: { onBack: () => void }) {
                   onClick={handleRedeem}
                   title={redeemable ? undefined : "集滿後才能兌換"}
                 >
-                  🎁 確認兌換「{reward.title}」
+                  🎁 幫他換「{reward.title}」
                 </button>
               )}
               <button className="pin-forget" onClick={() => setGate("closed")}>關閉家長區</button>
             </div>
             <p className="parent-hint">
-              兌換後會消耗 {reward?.targetStamps ?? 0} 枚印章重新開始集點;印章紀錄保留在「我的印章」。
+              換完會用掉 {reward?.targetStamps ?? 0} 個章、重新開始集;蓋過的章都還留在「我蓋到的章」裡。
               資料只存在這台裝置的瀏覽器裡。
             </p>
           </div>
