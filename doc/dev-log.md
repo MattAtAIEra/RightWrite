@@ -604,7 +604,7 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - [ ] Phase 15 follow-up — `similar_wrong` 資料本身有雜訊（憑→媽、蓓→部 既不同音也不相似）；同音分級目前把它們濾掉了，但根治要回頭清 `scripts/` 產資料那一段
 - [ ] Phase 14 follow-up — 兌換後自動建議下一張集點卡（目前兌換後需家長重新填寫獎品；可加「再來一張」快速鍵帶入上次設定）
 - [ ] Phase 14 follow-up — 集章資料 local-first：換裝置／清瀏覽器會歸零；若家長反映，屆時併入跨裝置同步（Phase C，需後端）
-- [ ] Phase 14 follow-up — 滿分印目前每次滿分都蓋（scope=sessionId），觀察是否被「刷短範圍」灌水；必要時改每日上限
+- [ ] Phase 14 follow-up — 滿分章（Phase 15 前叫「滿分印」）目前每次滿分都蓋（scope=sessionId），觀察是否被「刷短範圍」灌水；必要時改每日上限
 - [ ] Phase 13 follow-up — 上線後以 Cloud Run log 監控「Gemini(escalated)」出現率（＝升級率），一週後回算實際月成本；若升級率異常高，檢查是否 low 模型行為飄移
 - [ ] Phase 13 follow-up — `_recognize_with_gemini` 兩段呼叫目前串行，寫錯情境延遲 9–16s；若體感太慢可考慮 streaming 提示或前端進度動畫
 - [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
