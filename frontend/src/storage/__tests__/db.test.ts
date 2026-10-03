@@ -8,10 +8,10 @@ beforeEach(async () => {
 });
 
 describe("getDB", () => {
-  it("opens DB with all 4 stores", async () => {
+  it("opens DB with all 6 stores", async () => {
     const db = await getDB();
     const names = Array.from(db.objectStoreNames).sort();
-    expect(names).toEqual(["charStats", "handwritingImages", "profiles", "sessions"]);
+    expect(names).toEqual(["charStats", "handwritingImages", "parentSettings", "profiles", "sessions", "stamps"]);
   });
 
   it("sessions store has byProfile and byStartedAt indexes", async () => {

@@ -35,7 +35,7 @@ export async function listProfiles(): Promise<Profile[]> {
 
 export async function updateProfile(
   id: string,
-  patch: Partial<Pick<Profile, "name" | "emoji">>,
+  patch: Partial<Pick<Profile, "name" | "emoji" | "prefs">>,
 ): Promise<Profile> {
   const db = await getDB();
   const existing = await db.get("profiles", id);

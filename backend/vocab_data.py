@@ -91,6 +91,31 @@ def get_all_characters_in_range(start: int, end: int, grade_id: str = "4_kangxua
     return chars
 
 
+_KNOWN_CHARS: set[str] = set()
+
+
+def get_known_characters() -> set[str]:
+    """所有年級、所有版本課本裡出現過的字(生字＋詞語用字)。
+
+    拿來判斷一個錯字候選對國小生來說是不是「看過的字」。挑錯字時同音的候選
+    可能是「婞」「庶」這種課本從來不會教的字,寫進句子小朋友只會覺得莫名其
+    妙,也學不到真正容易混淆的那組字。
+    """
+    global _KNOWN_CHARS
+    if _KNOWN_CHARS:
+        return _KNOWN_CHARS
+    _load()
+    chars: set[str] = set()
+    for grade_data in _RAW.values():
+        for lesson in grade_data.get("lessons", {}).values():
+            for c in lesson["characters"]:
+                chars.add(c["char"])
+            for comp in lesson.get("compounds", []):
+                chars.update(comp["word"])
+    _KNOWN_CHARS = chars
+    return _KNOWN_CHARS
+
+
 def get_all_compounds_in_range(start: int, end: int, grade_id: str = "4_kangxuan") -> list[dict]:
     """Get all compound words for a range of lessons, with lesson info."""
     data = get_vocab_data(grade_id)

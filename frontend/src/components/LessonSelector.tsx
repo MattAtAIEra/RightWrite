@@ -2,67 +2,59 @@ import { useEffect, useState } from "react";
 import type { LessonsResponse, PracticeMode, GradeOption } from "../types";
 import { fetchLessons, fetchGrades } from "../api";
 import { usePersonalization } from "../personalization/PersonalizationContext";
+import { usePreferences } from "../personalization/PreferencesContext";
 import ProfilePicker from "../personalization/ProfilePicker";
 import { purgeOlderThanFourMonths } from "../storage/imageStore";
 import { isSkippingImages, setSkippingImages } from "../storage/skipImagesFlag";
+import RewardStrip from "../rewards/RewardStrip";
 
 interface Props {
   onStart: (start: number, end: number, mode: PracticeMode, grade: string, gradeLabel: string) => void;
   onOpenDashboard: () => void;
+  onOpenStampBook: () => void;
 }
 
-function HappyKidsIllustration() {
+/** Brand mark: the character 正 ("correct") circled and ticked in red pen —
+    the exact gesture a teacher makes when a student fixes a wrong character. */
+function ScholarMark() {
   return (
     <svg
-      viewBox="0 0 320 100"
+      viewBox="8 10 166 116"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ width: "260px", margin: "0 auto 8px", display: "block" }}
+      style={{ width: "176px", margin: "0 auto 12px", display: "block", overflow: "visible" }}
+      aria-hidden="true"
     >
-      {/* Stars */}
-      <g opacity="0.7">
-        <path d="M30 20l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffe66d" />
-        <path d="M280 15l2 5 5 1-4 3 1 5-4-2-5 2 1-5-3-3 5-1z" fill="#ffe66d" />
-        <path d="M160 8l2 4 4 0-3 3 1 4-4-2-4 2 1-4-3-3 4 0z" fill="#ff6b6b" />
-      </g>
-      {/* Kid 1 - reading book */}
-      <g transform="translate(60, 25)">
-        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
-        <circle cx="14" cy="15" r="2.5" fill="#2d3436" />
-        <circle cx="26" cy="15" r="2.5" fill="#2d3436" />
-        <path d="M15 23 Q20 28 25 23" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M6 4 Q20-6 34 4" fill="#2d3436" />
-        <rect x="6" y="40" width="28" height="24" rx="3" fill="#4ecdc4" />
-        <rect x="2" y="60" width="36" height="10" rx="2" fill="#ffe66d" stroke="#ffd93d" strokeWidth="1" />
-        <line x1="10" y1="63" x2="30" y2="63" stroke="#ffd93d" strokeWidth="1" />
-        <line x1="10" y1="66" x2="25" y2="66" stroke="#ffd93d" strokeWidth="1" />
-      </g>
-      {/* Kid 2 - writing with pencil */}
-      <g transform="translate(145, 25)">
-        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
-        <circle cx="14" cy="15" r="2.5" fill="#2d3436" />
-        <circle cx="26" cy="15" r="2.5" fill="#2d3436" />
-        <path d="M16 24 Q20 27 24 24" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M8 2 Q12-4 16 2 Q20-4 24 2 Q28-4 32 2" fill="#2d3436" />
-        <rect x="6" y="40" width="28" height="24" rx="3" fill="#ff6b6b" />
-        <line x1="38" y1="50" x2="52" y2="66" stroke="#ffa94d" strokeWidth="3" strokeLinecap="round" />
-        <polygon points="52,66 55,68 53,70" fill="#2d3436" />
-      </g>
-      {/* Kid 3 - waving */}
-      <g transform="translate(230, 25)">
-        <circle cx="20" cy="18" r="16" fill="#ffd8a8" />
-        <circle cx="14" cy="14" r="2.5" fill="#2d3436" />
-        <circle cx="26" cy="14" r="2.5" fill="#2d3436" />
-        <path d="M14 24 Q20 29 26 24" stroke="#ff6b6b" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M4 6 Q20-8 36 6" fill="#2d3436" />
-        <rect x="6" y="40" width="28" height="24" rx="3" fill="#ffe66d" />
-        <line x1="36" y1="42" x2="44" y2="28" stroke="#ffd8a8" strokeWidth="4" strokeLinecap="round" />
-        <circle cx="45" cy="26" r="4" fill="#ffd8a8" />
-      </g>
-      {/* Hearts */}
-      <g opacity="0.6">
-        <path d="M110 45 Q110 38 116 38 Q122 38 122 45 Q122 52 110 60 Q98 52 98 45 Q98 38 104 38 Q110 38 110 45z" fill="#ff6b6b" transform="scale(0.5) translate(140, 10)" />
-      </g>
+      {/* the character being marked correct */}
+      <text
+        x="70"
+        y="71"
+        fontSize="62"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="var(--ink)"
+        fontFamily="'LXGW WenKai TC', serif"
+        fontWeight="700"
+      >
+        正
+      </text>
+      {/* red-pen circle — hand-drawn, with a natural overshoot where the stroke closes */}
+      <path
+        d="M 52.5 111.4 C 50.7 110.7 44.9 109.0 41.5 107.2 C 38.1 105.3 34.9 102.9 32.1 100.3 C 29.3 97.7 26.9 94.6 24.8 91.5 C 22.7 88.4 20.8 85.1 19.4 81.6 C 18.0 78.1 16.8 74.4 16.5 70.7 C 16.2 67.0 16.4 63.1 17.4 59.5 C 18.4 55.9 20.3 52.4 22.4 49.3 C 24.4 46.2 27.3 43.4 29.9 40.8 C 32.6 38.2 35.4 35.9 38.3 33.6 C 41.2 31.3 44.1 28.9 47.4 26.9 C 50.7 24.9 54.2 22.8 58.1 21.5 C 61.9 20.3 66.2 19.4 70.3 19.4 C 74.4 19.3 78.7 20.0 82.6 21.1 C 86.5 22.2 90.3 23.9 93.8 25.8 C 97.3 27.6 100.6 29.8 103.6 32.2 C 106.6 34.6 109.5 37.3 111.8 40.2 C 114.1 43.2 116.1 46.5 117.5 49.8 C 118.9 53.2 119.6 56.8 120.0 60.4 C 120.5 63.9 120.4 67.5 120.2 71.0 C 120.0 74.5 119.7 78.1 118.9 81.6 C 118.2 85.2 117.4 88.9 115.7 92.4 C 114.1 95.8 112.0 99.3 109.2 102.1 C 106.5 104.9 102.9 107.3 99.2 109.0 C 95.6 110.7 91.3 111.7 87.3 112.4 C 83.4 113.2 79.3 113.3 75.3 113.4 C 71.4 113.5 67.5 113.4 63.6 113.1 C 59.7 112.7 55.8 112.3 52.0 111.2 C 48.2 110.2 42.8 107.6 41.0 106.9"
+        stroke="var(--cinnabar)"
+        strokeWidth="6"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* red-pen tick beside it */}
+      <path
+        d="M 134 66 l 12 16 l 30 -42"
+        stroke="var(--cinnabar)"
+        strokeWidth="8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
@@ -70,24 +62,45 @@ function HappyKidsIllustration() {
 const PUBLISHERS = ["康軒版", "南一版", "翰林版"];
 const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
 
-export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
+export default function LessonSelector({ onStart, onOpenDashboard, onOpenStampBook }: Props) {
   const personalization = usePersonalization();
+  // 學期 / 出版社 / 年級 / 練習模式 are remembered preferences (device-level,
+  // plus per-profile when personalization is on) — read-through, write-through.
+  const { prefs, setPrefs } = usePreferences();
   const [showSettings, setShowSettings] = useState(false);
   const [skipImages, setSkipImagesState] = useState<boolean>(() => isSkippingImages());
   const [grades, setGrades] = useState<GradeOption[]>([]);
-  const [selectedPublisher, setSelectedPublisher] = useState("康軒版");
-  const [selectedGradeNum, setSelectedGradeNum] = useState(4);
   const [data, setData] = useState<LessonsResponse | null>(null);
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
   const [endLesson, setEndLesson] = useState(6);
-  const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
 
-  // Derive grade_id from publisher + grade selection
+  const selectedPublisher = prefs.publisher;
+  const selectedGradeNum = prefs.gradeNum;
+  const practiceMode: PracticeMode = prefs.practiceMode;
+  const setSelectedPublisher = (publisher: string) => setPrefs({ publisher });
+  const setSelectedGradeNum = (gradeNum: number) => setPrefs({ gradeNum });
+  const setPracticeMode = (practiceMode: PracticeMode) => setPrefs({ practiceMode });
+
+  // Available 學期 options come from the backend; newest first (115上 before 114下).
+  const terms = Array.from(
+    new Map(grades.map((g) => [g.term, g.term_label] as const)).entries(),
+  )
+    .map(([term, label]) => ({ term, label }))
+    .sort((a, b) => (a.term < b.term ? 1 : a.term > b.term ? -1 : 0));
+  const selectedTerm = terms.some((t) => t.term === prefs.term)
+    ? prefs.term
+    : terms[0]?.term ?? prefs.term;
+  const setSelectedTerm = (term: string) => setPrefs({ term });
+
+  // Derive grade_id from term + publisher + grade selection
   const selectedGrade =
     grades.find(
-      (g) => g.publisher === selectedPublisher && g.grade === GRADE_LABELS[selectedGradeNum - 1]
+      (g) =>
+        g.term === selectedTerm &&
+        g.publisher === selectedPublisher &&
+        g.grade === GRADE_LABELS[selectedGradeNum - 1]
     )?.id || "";
 
   // Fetch available grades on mount
@@ -155,47 +168,47 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
             ⚙️
           </button>
         </div>
-      </div>
 
-      {showSettings && (
-        <div className="settings-dropdown">
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={personalization.enabled}
-              onChange={(e) => personalization.setEnabled(e.target.checked)}
-            />
-            <span>個人化記錄</span>
-          </label>
-          <p className="settings-hint">
-            開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
-          </p>
-          {personalization.enabled && (
-            <>
-              <button
-                className="settings-action"
-                onClick={async () => {
-                  const deleted = await purgeOlderThanFourMonths();
-                  alert(`已刪除 ${deleted} 張 4 個月前的手寫圖`);
-                }}
-              >
-                🗑️ 清理 4 個月前資料
-              </button>
-              <button
-                className="settings-action"
-                onClick={() => {
-                  const next = !skipImages;
-                  setSkippingImages(next);
-                  setSkipImagesState(next);
-                  alert(next ? "停止儲存新的手寫圖（既有資料保留）" : "重新開始儲存手寫圖");
-                }}
-              >
-                {skipImages ? "✅ 開始儲存手寫圖" : "🚫 不再儲存手寫圖"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
+        {showSettings && (
+          <div className="settings-dropdown">
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={personalization.enabled}
+                onChange={(e) => personalization.setEnabled(e.target.checked)}
+              />
+              <span>個人化記錄</span>
+            </label>
+            <p className="settings-hint">
+              開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
+            </p>
+            {personalization.enabled && (
+              <>
+                <button
+                  className="settings-action"
+                  onClick={async () => {
+                    const deleted = await purgeOlderThanFourMonths();
+                    alert(`已刪除 ${deleted} 張 4 個月前的手寫圖`);
+                  }}
+                >
+                  🗑️ 清理 4 個月前資料
+                </button>
+                <button
+                  className="settings-action"
+                  onClick={() => {
+                    const next = !skipImages;
+                    setSkippingImages(next);
+                    setSkipImagesState(next);
+                    alert(next ? "停止儲存新的手寫圖（既有資料保留）" : "重新開始儲存手寫圖");
+                  }}
+                >
+                  {skipImages ? "✅ 開始儲存手寫圖" : "🚫 不再儲存手寫圖"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {personalization.enabled && (
         <ProfilePicker />
@@ -207,12 +220,39 @@ export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
         </div>
       )}
 
+      <RewardStrip onOpen={onOpenStampBook} />
+
       <div className="selector-header">
-        <HappyKidsIllustration />
+        <ScholarMark />
         <p className="subtitle">
           {data ? `${data.publisher} ${data.grade} ${data.semester}` : ""}
         </p>
       </div>
+
+      {/* 學期 selector (radio) */}
+      {terms.length > 0 && (
+        <div className="grade-selector">
+          <h3>學期</h3>
+          <div className="term-radio-group" role="radiogroup" aria-label="學期">
+            {terms.map((t) => (
+              <label
+                key={t.term}
+                className={`term-radio ${selectedTerm === t.term ? "active" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="term"
+                  value={t.term}
+                  checked={selectedTerm === t.term}
+                  onChange={() => setSelectedTerm(t.term)}
+                />
+                <span className="term-radio-dot" aria-hidden="true" />
+                <span className="term-radio-label">{t.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Publisher selector */}
       {grades.length > 1 && (

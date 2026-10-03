@@ -23,5 +23,7 @@ function pickApp(pathname: string): { name: string; element: React.ReactNode } {
 
 const { name, element } = pickApp(window.location.pathname);
 document.body.dataset.app = name;
+// Portal 與一字千金各自在元件內設定 document.title；改錯字神器沒有，所以在這裡補
+if (name === "rightwrite") document.title = "改錯字練習 · RightWrite";
 
 createRoot(document.getElementById("root")!).render(<StrictMode>{element}</StrictMode>);

@@ -1,11 +1,48 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { AnswerResult } from "./ArticlePractice";
 import { recognizeHandwriting } from "../api";
+import StampSeal from "../rewards/StampSeal";
+import { STAMP_LABELS, type StampAward } from "../rewards/types";
 
 interface Props {
   results: AnswerResult[];
+  stampAward?: StampAward | null;
   onRetry: () => void;
   onBack: () => void;
+}
+
+/** 蓋章時刻 — new stamps thump onto the page one by one */
+function StampCelebration({ award, onClose }: { award: StampAward; onClose: () => void }) {
+  const { newStamps, progress, weeklyCount, weeklyGoal } = award;
+  const reward = progress.activeReward;
+  return (
+    <div className="stamp-overlay" role="dialog" aria-label="獲得新印章">
+      <div className="stamp-overlay-card">
+        <h3>蓋章囉！</h3>
+        <div className="stamp-overlay-seals">
+          {newStamps.map((s, i) => (
+            <figure key={s.id} className="stamp-overlay-item" style={{ animationDelay: `${0.35 + i * 0.55}s` }}>
+              <StampSeal type={s.type} size={84} stamping />
+              <figcaption>{STAMP_LABELS[s.type].name}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <p className="stamp-overlay-progress">
+          {reward ? (
+            progress.unredeemed >= reward.targetStamps ? (
+              <>已經集滿 <b>{reward.targetStamps}</b> 個章！請爸爸媽媽到印章收集簿幫你換「{reward.title}」</>
+            ) : (
+              <>已經有 <b>{progress.unredeemed}</b> / {reward.targetStamps} 個章，再 {reward.targetStamps - progress.unredeemed} 個就能換「{reward.title}」</>
+            )
+          ) : (
+            <>已經有 <b>{progress.unredeemed}</b> 個章</>
+          )}
+          <span className="stamp-overlay-week">這禮拜已經練習 {weeklyCount} / {weeklyGoal} 次</span>
+        </p>
+        <button className="stamp-overlay-close" onClick={onClose}>收下印章</button>
+      </div>
+    </div>
+  );
 }
 
 /** Inline practice canvas for 訂正 — write the correct char, then validate via recognition API */
@@ -27,8 +64,8 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
     ctx.scale(dpr, dpr);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, rect.width, rect.height);
-    // Draw grid
-    ctx.strokeStyle = "#e0e0e0";
+    // Draw grid (米字格 red guides)
+    ctx.strokeStyle = "rgba(178, 58, 46, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -64,7 +101,7 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
     setIsDrawing(true);
     setHasDrawn(true);
     setVerifyResult(null);
-    ctx.strokeStyle = "#333333";
+    ctx.strokeStyle = "#2a241d";
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -156,7 +193,7 @@ function ConfettiCelebration() {
       delay: Math.random() * 0.8,
       duration: 1.5 + Math.random() * 1.5,
       size: 6 + Math.random() * 8,
-      color: ["#ff6b6b", "#4ecdc4", "#ffe66d", "#ffa94d", "#51cf66", "#ff8e8e"][
+      color: ["#b23a2e", "#c5483a", "#b3852f", "#2f5566", "#5a7a4e", "#e7d3ad"][
         Math.floor(Math.random() * 6)
       ],
       drift: -30 + Math.random() * 60,
@@ -197,19 +234,19 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
       style={{ width: "240px", margin: "0 auto 4px", display: "block", overflow: "visible" }}
     >
       <g opacity="0.8">
-        <path d="M40 30l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#ffe66d">
+        <path d="M40 30l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#b3852f">
           <animateTransform attributeName="transform" type="rotate" values="0 40 35;360 40 35" dur="6s" repeatCount="indefinite" />
         </path>
-        <path d="M150 15l4 8 8 1-6 6 1 8-7-4-7 4 1-8-6-6 8-1z" fill="#ff6b6b">
+        <path d="M150 15l4 8 8 1-6 6 1 8-7-4-7 4 1-8-6-6 8-1z" fill="#b23a2e">
           <animateTransform attributeName="transform" type="rotate" values="0 150 22;-360 150 22" dur="8s" repeatCount="indefinite" />
         </path>
-        <path d="M260 28l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#4ecdc4">
+        <path d="M260 28l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#2f5566">
           <animateTransform attributeName="transform" type="rotate" values="0 260 33;360 260 33" dur="7s" repeatCount="indefinite" />
         </path>
-        <circle cx="90" cy="25" r="4" fill="#ffa94d" opacity="0.6">
+        <circle cx="90" cy="25" r="4" fill="#b3852f" opacity="0.6">
           <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite" />
         </circle>
-        <circle cx="210" cy="20" r="3" fill="#ff6b6b" opacity="0.6">
+        <circle cx="210" cy="20" r="3" fill="#b23a2e" opacity="0.6">
           <animate attributeName="r" values="3;5;3" dur="2.5s" repeatCount="indefinite" />
         </circle>
       </g>
@@ -217,8 +254,9 @@ function CelebrationStars({ accuracy }: { accuracy: number }) {
   );
 }
 
-export default function ResultView({ results, onRetry, onBack }: Props) {
+export default function ResultView({ results, stampAward, onRetry, onBack }: Props) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showStamps, setShowStamps] = useState(() => (stampAward?.newStamps.length ?? 0) > 0);
   const [correctionTarget, setCorrectionTarget] = useState<string | null>(null);
 
   const wrongCharResults = results.filter((r) => r.type === "found_wrong" || r.type === "missed");
@@ -237,12 +275,13 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
     }
   }, [accuracy]);
 
-  const getEmoji = (acc: number) => {
-    if (acc === 100) return "🏆";
-    if (acc >= 80) return "🌟";
-    if (acc >= 60) return "👍";
-    if (acc >= 40) return "💪";
-    return "📖";
+  // Traditional academic grade marks (評等), rendered as a 硃砂 seal
+  const getGradeMark = (acc: number) => {
+    if (acc === 100) return "優";
+    if (acc >= 80) return "甲";
+    if (acc >= 60) return "乙";
+    if (acc >= 40) return "丙";
+    return "丁";
   };
 
   const getMessage = (acc: number) => {
@@ -259,16 +298,19 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
     return "✗ 答錯";
   };
 
-  const circleColor = accuracy >= 60 ? "#51cf66" : "#ffa94d";
+  const circleColor = accuracy >= 60 ? "#5a7a4e" : "#b3852f";
 
   return (
     <div className="result-container">
       {showConfetti && <ConfettiCelebration />}
+      {showStamps && stampAward && (
+        <StampCelebration award={stampAward} onClose={() => setShowStamps(false)} />
+      )}
 
       <div className="result-header">
         <CelebrationStars accuracy={accuracy} />
         <div className={`result-emoji ${accuracy === 100 ? "perfect-bounce" : ""}`}>
-          {getEmoji(accuracy)}
+          {getGradeMark(accuracy)}
         </div>
         {accuracy === 100 && (
           <div className="perfect-banner">恭喜全對</div>
@@ -279,7 +321,7 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
       <div className="accuracy-display">
         <div className="accuracy-circle">
           <svg viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45" fill="none" stroke="#dfe6e9" strokeWidth="8" />
+            <circle cx="50" cy="50" r="45" fill="none" stroke="#d8c5a6" strokeWidth="8" />
             <circle
               cx="50" cy="50" r="45" fill="none"
               stroke={circleColor} strokeWidth="8"
@@ -299,6 +341,14 @@ export default function ResultView({ results, onRetry, onBack }: Props) {
             <span className="false-alarm-count">，誤判 {falseAlarms.length} 個</span>
           )}
         </div>
+        {stampAward && (
+          <div className="result-week-progress">
+            本週已練習 {stampAward.weeklyCount} / {stampAward.weeklyGoal} 次
+            {stampAward.progress.activeReward && (
+              <>・集章 {stampAward.progress.unredeemed} / {stampAward.progress.activeReward.targetStamps} 個</>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="result-details">

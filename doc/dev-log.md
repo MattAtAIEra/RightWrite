@@ -261,12 +261,363 @@ Executed subagent-driven, 6 phases, ~28 commits, with per-task spec + code-quali
 
 ---
 
+## Phase 7: Academic Redesign — 「墨韻硃砂」Scholarly Aesthetic
+
+**Date**: 2026-06-05
+**Trigger**: User invoked `/frontend-design` on a new `new-design` branch: supply Zen Maru Gothic + LXGW WenKai TC fonts, fix the inconsistent-font problem, and redesign the UI in an academic style (學院風) — explicitly *not* cute.
+
+Full-frontend visual redesign. No backend, API, storage, or logic changes. Class names, the 直書 `vertical-rl` layout, the zhuyin ruby rules, and the hand-rolled SVG chart structure were all preserved — only typography, colour, motion, and decorative motifs changed.
+
+### Completed Items
+
+1. **Typography unification** (`frontend/index.html`, `frontend/src/index.css`)
+   - Removed the third font `ZCOOL KuaiLe`; the Google Fonts link now loads `Zen Maru Gothic` (400/500/700) + `LXGW WenKai TC` (400/700)
+   - Two-font system via tokens: `--font-display` = Zen Maru Gothic (UI chrome, numerals, headings, labels), `--font-body` = LXGW WenKai TC (article text, characters, seals)
+   - Eliminated the dashboard/personalization `font-family: inherit` (system-font) inconsistency — the root cause of the "字體不一" report
+   - Favicon ✏️ emoji → inline cinnabar 「正」 seal SVG; added `theme-color`; title → `改錯字練習 · RightWrite`
+
+2. **Design-system rewrite** (`frontend/src/index.css`, full rewrite)
+   - New `:root` design tokens: rice-paper surfaces (宣紙) + fractal-noise grain overlay, ink text hierarchy (墨), and a semantic colour system — cinnabar 硃砂 (primary action / corrections), indigo 青黛 (selection / secondary), bamboo 竹綠 (success), gold 赭金 (highlight / warnings)
+   - Old coral/teal/yellow aliases (`--primary` etc.) remapped onto the new palette so any stray references stay coherent
+   - Refined geometry (radii 12/8/6 px, warm low shadows) and calm `ease-out` motion; removed spring/overshoot, wobble, sparkle, and floating-blob animations
+   - All component sections restyled in place (selector, practice, canvas, result, dashboard, personalization, responsive)
+
+3. **De-cuting component edits** (academic motifs replace cartoon elements)
+   - `LessonSelector.tsx` — `HappyKidsIllustration` (cartoon kids) → `ScholarMark`: a brushed ensō ink ring with a cinnabar 「正」 seal stamped over it
+   - `ResultView.tsx` — `getEmoji` (🏆🌟👍💪📖) → `getGradeMark` returning traditional grades 優/甲/乙/丙/丁, rendered as a 硃砂 seal (`.result-emoji`, 白文 style, stamp animation); confetti + celebration-star + accuracy-circle colours moved to the academic palette; correction canvas grid → cinnabar 米字格 + ink stroke
+   - `HandwritingCanvas.tsx` — 九宮格 grid `#e0e0e0` → cinnabar `rgba(178,58,46,.22)` (authentic red practice-grid), stroke `#333` → ink `#2a241d`
+   - `MistakeTrendChart.tsx` — hand-rolled SVG line/dots/labels/grid recoloured to cinnabar + ink-faint (kept the no-recharts hand-rolled structure per `project_charting_no_recharts`)
+
+4. **Branch + auto-memory**
+   - Committed to `new-design` and pushed (`origin/new-design`, upstream set); single commit `feat(design): 學院風格重新設計（墨韻硃砂）`
+   - Saved auto-memory `feedback_academic_design.md` recording the pivot away from CLAUDE.md's cute aesthetic
+
+### Discoveries & Fixes
+
+- **Font inconsistency was three-fold**: ZCOOL KuaiLe (headings) + LXGW WenKai TC (body) + system fonts (`inherit`) in the dashboard/personalization code added during Phase 5. The dashboard panels also used generic styling (`#fff` cards, `#888` grey, `rgba(0,0,0,.05)` shadows) with no shared design language — fixed by a single token-driven card chrome.
+- **`.lesson-card` class collision**: used by both the selector preview and the dashboard progress grid with different children. Gave it a shared neutral base and scoped the context-specific bits under `.lesson-preview .lesson-card` / `.lesson-progress-grid` to avoid one overriding the other.
+- **Recognition safety**: kept the handwriting canvas *background* white (max contrast for the Vision/Gemini OCR pipeline) and only recoloured the guide grid + stroke — the cinnabar guides mimic a real 米字格 practice sheet without risking recognition.
+- **CLAUDE.md is now stale**: its "Frontend Aesthetics" section still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion — all of which this phase intentionally reverses. Flagged for update (see TODO).
+- **Pre-existing lint debt unchanged**: the 5 lint errors (`Math.random` in confetti, setState-in-effect, unused vars) live on lines this phase did not touch; no new lint errors were introduced.
+
+### Test Results
+
+- Build: SUCCESS (`tsc -b && vite build`; CSS 35 KB / gzip 6.7 KB, JS 238 KB)
+- Visual verification: headless Chrome (Playwright) screenshots of all four stages (select / practice / result / dashboard) at mobile 430 px + desktop 880 px against an offline harness loading the built CSS — zero console/page errors, no font-load failures, design confirmed cohesive
+- Lint: 5 errors, all pre-existing (unchanged from before this phase); 0 introduced
+
+---
+
+## Phase 8: 提升手寫辨識準確率（繁體約束 + Gemini 主辨識 + 簡轉繁）
+
+**日期**：2026-06-21
+**觸發**：國小使用者回報——手寫常需重寫好幾次仍辨識不出。詢問是否有以「繁體中文」角度辨識。經查兩條辨識路徑皆未約束繁體，且引擎優先序不利。
+
+### 完成項目
+
+1. **辨識引擎優先序對調**（`backend/main.py` `recognize_handwriting`）
+   - 改為 Gemini 多模態「主辨識」、Google Vision OCR「備援」
+   - 根因：舊版 Vision 先跑且幾乎總會回傳某字（即使錯），較弱的 OCR 承擔了多數辨識，較強的 Gemini 只在 Vision 完全無輸出時才備援
+   - 訂正：舊 TODO 稱「Vision API 停用」已過時——`vision.googleapis.com` 實際已啟用，故對調為真實品質改動而非 no-op
+
+2. **Gemini prompt 繁體約束 + 手寫情境**（`_recognize_with_gemini`）
+   - 明確要求「以繁體中文（台灣教育部標準字形）辨識並輸出繁體字，絕不輸出簡體」
+   - 補上「國小四年級手寫、筆畫不工整、比例不一、線條歪斜」情境以增加容錯
+   - 回傳改用 `_first_cjk()` 容錯解析（取首個 CJK，容許多餘空白/標點）
+
+3. **Vision 路徑強化**（`_recognize_with_vision_api`）
+   - `text_detection` → `document_text_detection`（手寫導向偵測）
+   - 加 `language_hints=["zh-Hant", "zh-TW"]`
+   - `_first_cjk()` 過濾米字格雜訊，只取首個 CJK
+
+4. **簡轉繁正規化保險**
+   - 新增 `_normalize_to_traditional()`（OpenCC `s2tw`），套用於兩條路徑輸出
+   - `backend/requirements.txt` 加入 `opencc-python-reimplemented>=0.1.7`
+   - 避免引擎回傳簡體（学/过/为）被嚴格 `==` 比對誤判為錯字
+
+### 發現與修正
+
+- **問題**：初次「驗證」用 PIL 乾淨印刷字體（無米字格、無歪斜），全中但不能證明手寫改善，被使用者當場識破。
+- **原因**：測試輸入與真實畫布輸出差距過大。真實輸入為 `HandwritingCanvas.tsx`：白底 + 淡紅虛線米字格（`rgba(178,58,46,0.22)`，中線十字+對角線）+ 黑筆觸（`#2a241d`, lineWidth 4）→ `toDataURL("image/png")`。
+- **修正**：改用「米字格 + 台灣標楷體 TW-Kai + 旋轉/錯切/波形扭曲」的合成圖，並直接打 **live production endpoint** 驗證。
+- **教訓**：辨識類改動須用接近真實輸入驗證，且以部署後 endpoint 為準（`conf=0.85`=Gemini 路徑、`0.9`=Vision 路徑）。本機無 Vision ADC（`DefaultCredentialsError`），本機 Vision 結果一律無效、不可作對照證據。合成扭曲字仍比真小孩潦草字工整，真實幅度須待實際使用確認。
+
+### 測試結果
+
+- 單元測試：10/10 通過（pytest）
+- 模型名核對：`gemini-3-flash-preview` 存在（ListModels API）
+- OpenCC `s2tw`：学→學、过→過、为→為、说→說 正確；繁體輸入維持不變
+- 簡轉繁確定性展示：引擎回傳 学/过/爱/万 → 舊判定「錯」、新判定「對」（4/4 假性錯誤消除）
+- **線上 production 實打**（revision `rightwrite-00041-lfg`）：合成扭曲圖 8/8 命中（學/過/愛/萬/葉/廣/鄉/懂），`conf=0.85` 確認走 Gemini 主路徑
+- Build / 部署：成功（Cloud Run `rightwrite-00041-lfg`，asia-east1，100% 流量）
+
+---
+
+## Phase 9: Logo 重新設計 — 紅筆圈正字加打勾
+
+**日期**：2026-06-21
+**觸發**：使用者回報首頁 logo「很奇怪」，並指定方向——用「正」字、加打勾、紅筆圈起來。
+
+### 完成項目
+
+1. **品牌標記 `ScholarMark`**（`frontend/src/components/LessonSelector.tsx`）
+   - 舊版：斷掉的墨色 ensō 圓環 + 偏在右下的硃砂方形印章「正」——正字未被圈住、語意不清
+   - 新版：墨黑「正」字置中，硃砂紅筆「圈起來 + 右側打勾」，呼應老師批改「答對」的手勢，貼合「改錯字」主題
+   - 紅圈為程式生成的手繪感路徑：橢圓 + 輕微抖動（sin 疊加）+ 收筆 overshoot 自然交疊，Catmull-Rom 平滑，非死板正圓
+   - 改用主題色票 `var(--ink)` / `var(--cinnabar)`（取代寫死的 hex），與全站硃砂自動一致
+   - favicon（`frontend/index.html`）維持原紅方塊「正」——細節在 16px 才清晰，圈+勾會糊
+
+### 發現與修正
+
+- **問題**：本機以建置產物截圖時，首頁卡在「載入中…」，logo 未顯示。
+- **原因**：`ScholarMark` 在 lessons/grades API 載入後才渲染；純靜態 server 無 `/api`。
+- **修正**：改以本機 `uvicorn main:app` 跑真實後端再截圖，確認 logo 在實際 app 內正確渲染、CSS 變數有解析。
+- **教訓**：前端視覺改動須在「資料就緒」狀態下驗證真實畫面，不能只看靜態檔；延續 Phase 8 的「以真實渲染為準」原則。
+
+### 測試結果
+
+- Build：成功（`tsc -b && vite build`；CSS 35.06 KB / gzip 6.73 KB、JS 238.34 KB）
+- 設計驗證：headless Chrome 截圖比較三變體（圈+勾並排 / 勾鑲圈右上 / 閉合圈+並排勾），採「手繪圈+右側並排勾」
+- 真實畫面驗證：本機 uvicorn + 截圖、線上 production 截圖各一，logo 皆正確渲染
+- 部署：成功（Cloud Run `rightwrite-00042-r42`，asia-east1，100% 流量）
+
+---
+
+## Phase 10: 修正手寫畫布「清除重寫」格線與筆跡位移
+
+**日期**：2026-06-30
+**觸發**：學生回報——寫字時按下「清除重寫」，手寫區的虛線米字格底稿會位移，手寫筆跡也跟著位移（嚴重問題）。
+
+### 完成項目
+
+1. **手寫畫布尺寸初始化**（`frontend/src/components/HandwritingCanvas.tsx`）
+   - backing store（`canvas.width/height`）改用 `clientWidth/clientHeight`（layout 尺寸）量測，取代 `getBoundingClientRect()`
+   - 以 `ctx.setTransform(dpr,0,0,dpr,0,0)` 取代 `ctx.scale(dpr,dpr)`（冪等，避免重複呼叫累積縮放）
+   - 抽出單一 `paintBackground(ctx,w,h)` 供初始化與清除共用，消除 init／clearCanvas 兩份會分歧的重複格線程式碼
+   - `clearCanvas` 直接呼叫 `setupCanvas()`，保證清除與初始化走同一條路徑、尺寸一致
+
+### 發現與修正
+
+- **問題描述**：按「清除重寫」後，虛線米字格底稿位移、且之後的手寫筆跡與指標位置對不上。
+- **原因**：init `useEffect`（`[]`，mount 時執行）用 `getBoundingClientRect()` 量尺寸設定 backing store，但當下 `.canvas-dialog` 正播 `popIn` 的 `scale(0.9→1)` 進場動畫（`index.css`）。`getBoundingClientRect()` 受 CSS transform 影響，回傳動畫中被縮小的視覺尺寸（約 90%），使 backing store 偏小。動畫結束後 canvas 以全尺寸顯示（瀏覽器放大偏小的 backing store），而 `clearCanvas` 又用 settled 後的全尺寸重畫格線 → 兩套尺寸不匹配 → 格線跳位；且 `getPos` 以全尺寸座標對映到偏小的 backing store → 筆跡偏移。兩症狀同源。
+- **修正**：改用不受 transform 影響的 `clientWidth/clientHeight`（動畫進行中即為最終 layout 尺寸），詳見完成項目。
+- **教訓**：canvas 的 backing store 尺寸量測不可用 `getBoundingClientRect()`（會被祖先的 CSS transform／進場動畫污染），應用 `clientWidth/clientHeight`；初始化與重繪務必共用同一路徑，避免尺寸來源分歧。
+
+### 測試結果
+
+- Root-cause 重現（真實瀏覽器）：popIn 動畫中 `getBoundingClientRect().width=360` vs `clientWidth=400`，證實量測被縮放污染
+- 修正前後不變量對照：舊邏輯清除後 backing `720` ≠ 顯示需求 `800`（位移）；新邏輯 `800===800`（不位移）
+- 真實 app E2E（Playwright + 本機 uvicorn）：導到練習頁 → 點字開畫布 → 畫一筆 → 按清除；不變量 `backing===clientW*dpr` 於清除前後皆成立，截圖確認格線清除前後位置完全一致、筆跡正常清除
+- 線上 production 驗證：revision `rightwrite-00043-fch` E2E 不變量成立 + 截圖確認
+- Build：成功（`tsc -b && vite build`）
+- 部署：成功（Cloud Run `rightwrite-00043-fch`，asia-east1，100% 流量）
+
+---
+
+## Phase 11：設定 dropdown 定位跑位修正
+
+**日期**：2026-07-08
+**觸發**：使用者回報——點齒輪展開的「個人化記錄」設定彈窗位置不對，不在齒輪旁邊，跑位到畫面之外。
+
+### 完成項目
+
+1. **設定彈窗 DOM 巢狀修正**（`frontend/src/components/LessonSelector.tsx`）
+   - 將 `{showSettings && <div className="settings-dropdown">…}` 從 `.settings-bar` 的**兄弟節點**改為其**子節點**，使 `.settings-bar`（`position:relative`）成為彈窗的定位包含塊
+   - 彈窗為 `position:absolute`、不參與 flex 排版，移入後不影響標題列 `justify-content:space-between` 佈局
+
+### 發現與修正
+
+- **問題描述**：點齒輪後，`.settings-dropdown` 未出現在齒輪下方，而是掉到畫面外。
+- **原因**：`index.css` 的 `.settings-dropdown` 用 `position:absolute; right:0; top:calc(100% + 6px)`，作者在「學院風重設計」(42d0fc8) 為 `.settings-bar` 加了 `position:relative`，意圖讓彈窗錨定在標題列下方。但 JSX 中彈窗是 `.settings-bar` 的兄弟節點而非子節點，`.settings-bar` 只是兄弟不是祖先，錨不到；`#root`／`.app`／`.selector-container` 皆為 `static`，於是定位包含塊退回 viewport，`top:calc(100% + 6px)` 解析成 `100vh + 6px` → 彈窗掉到畫面下方之外。
+- **為何是回歸**：原始版 (b1966c5) 用固定像素 `right:16px; top:60px` 錨定 viewport，剛好落在頂端齒輪附近而「湊巧正常」；重設計改用百分比 `top` 後才暴露巢狀錯誤。
+- **修正**：把彈窗移入 `.settings-bar` 內，讓既有的 `position:relative` 真正成為定位祖先，`right:0`＝標題列右緣（＝齒輪右緣）、`top:calc(100% + 6px)`＝標題列正下方，回到齒輪下方右對齊。CSS 完全未動。
+- **教訓**：`position:absolute` 的百分比 `top/right` 依賴「最近的已定位**祖先**」，加了 `position:relative` 也要確認目標元素在 DOM 上真的是它的後代，兄弟關係無效。
+
+### 測試結果
+
+- Root-cause 追溯：git 比對確認 `top:calc(100%+6px)` 於 42d0fc8 導入、彈窗自 b1966c5 起即為 `.settings-bar` 兄弟；原始 CSS 為 `right:16px; top:60px`（viewport 錨定）
+- 型別檢查：`tsc --noEmit` 通過（exit 0），JSX 標籤平衡
+- 真實 app E2E（本機 vite:5173 + uvicorn:8000）：點齒輪 → 截圖確認「個人化記錄」彈窗出現在齒輪正下方、右對齊、完整在畫面內
+- Build：成功（Cloud Build `52467f3c-96e2-4b9c-841e-a087e4708ee6`，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00044-vxn`，asia-east1，100% 流量，取代 `rightwrite-00043-fch`）
+- 線上 production 驗證：導到 `https://rightwrite-532818994163.asia-east1.run.app/` → 點齒輪 → 截圖確認彈窗定位正確、完整在畫面內
+
+---
+
+## Phase 12：115 學年度上學期生字表 ＋ 學期 radio ＋ 偏好記憶
+
+**日期**：2026-08-20
+**觸發**：使用者提供 `doc/115上114下學期生字表_大腦與語言實驗室_20260723.xlsx`（115上＋114下、三版本、1–6 年級），要求加入系統、以 radio 讓使用者選「115上學期／114下學期」（預設 115上），並記住上次的選擇（含要不要顯示注音）；有開個人化記錄的小朋友要各自記住。
+
+### 完成項目
+
+1. **115上 生字資料**（`resource/<年級>上-<出版社>/`、`backend/vocab_all.json`）
+   - 實驗室 xlsx 只有生字／課次／同音旁字／雙字詞，沒有課名與例句；先驗證其 114下 資料與現有 pedia.cloud.edu.tw 資料逐課完全吻合，再用 `scripts/download_vocab_excel.py --year 115_1` 從 pedia 抓 115_1 逐課 Excel（課名＋詞語＋例句），共 201 檔、18 套
+   - `scripts/build_vocab_json.py` 支援 `上/下` 目錄；`TERMS` 對照 `上→115_1`、`下→114_2`；metadata 新增 `term`、`term_label`、`semester`
+   - **grade_id 相容**：114下 沿用 `{grade}_{pub}`（使用者 IndexedDB 的 sessions／charStats 以 gradeId 為 key，不能變）；115上 為 `115_1_{grade}_{pub}`
+   - **以實驗室表為權威交叉驗證**全部 36 套：缺字補入、pedia 獨有字移除；一對一差異視同音（袪→祛、賭→睹、壼→壺、始→使、險→顯）連詞語／例句一起改寫，非同音（罩→嬤、盛→耗、澈→激、施→凡）只換生字、詞語保留
+   - `similar_wrong` 優先序：curated → 實驗室「同音旁字」（常見程度 ≥3，最多 3 個）→ pypinyin 同音字補到 4 個。6968 字中 99% 有候選
+2. **後端 API**（`backend/main.py`）：`/api/grades` 回傳 `term`／`term_label`／`semester`，共 36 套；`/api/lessons`、`/api/generate` 直接吃新 id
+3. **學期 radio**（`frontend/src/components/LessonSelector.tsx`、`index.css`）：`學期` 區塊放在出版社之上，選項由 `/api/grades` 的 term 推導、新到舊排序；`.term-radio` 與 `.grade-btn` 同一家族（硃砂圓點＋靛藍邊框）
+4. **偏好記憶**（`storage/prefsStore.ts`、`personalization/PreferencesContext.tsx`、`storage/types.ts`）
+   - `Preferences = { term, publisher, gradeNum, practiceMode, showZhuyin }`，預設 `115_1／康軒版／四年級／句子改錯／不顯示注音`
+   - 兩層：裝置層 `localStorage["rightwrite:prefs"]` 永遠寫入；個人化開啟且有選小朋友時同步寫 `Profile.prefs`（IndexedDB，`updateProfile` patch 擴充）。解析順序 defaults ← device ← profile；切換小朋友從 IndexedDB 重新讀（context 裡的 `activeProfile` 是選取當下快照，不會看到之後的寫入）
+   - `LessonSelector` 的 學期／出版社／年級／練習模式 改為 read-through／write-through 偏好；`ArticlePractice` 的注音開關改讀寫 `prefs.showZhuyin`
+   - `sanitizePrefs` 只收型別正確的欄位，壞掉的 blob 不會污染狀態
+5. **下載腳本修正**（`scripts/download_vocab_excel.py`）：加 `--year`；原本 id 清單與 `<strong>第…課</strong>` 清單分開配對，遇到無課次單元（南一一上首單元「魔法文字」）會整目錄錯位一課，改為同一格內成對擷取
+
+### 發現與修正
+
+- **課名錯位**：重抓後 `一上-南一版/第一課：小船.xlsx` 內容其實是「魔法文字」的 日月山木水人手門；與實驗室表比對才發現。修正配對後重抓，現在 `魔法文字.xlsx` 因無 `第N課` 被 build 略過（實驗室表亦列為無課次特殊單元），其餘逐課吻合
+- **114下 既有資料有 12 處單字差異**（多為異體／誤植：壼、袪、賭）：採實驗室表；同音視為同一詞改寫詞語，非同音保留舊詞語以免造出「口嬤」這種假詞
+- **偏好層次的陷阱**：`PersonalizationContext.activeProfile` 是 `setActiveProfile` 當下從 IndexedDB 讀的快照，若偏好層直接依賴它會在「關掉再開個人化」時回到舊值，所以 `PreferencesProvider` 在 profileId 變化時自行 `getProfile()` 重讀
+- 本機沒有 Gemini 憑證時句子退回 `他學會了X這個詞語。`，屬既有 fallback，production 不受影響
+
+### 測試結果
+
+- 後端：`pytest` 15 通過（新增 `tests/test_terms.py` 5 項：36 套、兩學期各 18、legacy id 仍指 114_2、`/api/grades` term 欄位、115_1 四上康軒 L1＝實驗室表「泳串般姿溜耳鷹滑遨緩陀螺轉躍煩」、115_1 generate 正常）
+- 前端：`vitest` 58/58（新增 prefsStore 5 項、PreferencesContext 4 項）；`tsc -b` 通過；`eslint` 剩原本 5 個既有錯誤，無新增
+- 真實 app E2E（vite:5180 + uvicorn:8000，Chrome）：清空 localStorage → 預設 115上學期、副標「康軒版 四年級 115學年度第1學期」→ 切 114下／翰林／二／短文改錯 → reload 全部保留 → 開始練習 → 顯示注音（72 個 ruby）→ reload 再進入預設即顯示（按鈕為「隱藏注音」）→ 開個人化、新增小明、切 115上 → IndexedDB `profiles[小明].prefs = {term:"115_1"}`
+- Build：成功（Cloud Build `4a3f9c20-da5c-46eb-b22c-0b5fcd4842ba`，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00045-kxv`，asia-east1，100% 流量，取代 `rightwrite-00044-vxn`）
+- 線上 production 驗證：`/api/grades` 36 套（115上學期／114下學期各 18）；`/api/lessons?grade_id=115_1_4_kangxuan` → 115學年度第1學期、12 課、第1課「水陸小高手」；`/api/generate` 115_1 四上康軒 L1–6 → Gemini 造句正常（捐錢／翻山越嶺／谷底／轉身，課名「永遠的馬偕」「攀登生命的高峰」「水陸小高手」）；Chrome 開官網：無偏好時預設 115上學期、副標「康軒版 四年級 115學年度第1學期」、新 bundle `index-9laxi_Dk.js`；切 114下 → reload 仍為 114下 → 切回 115上
+
+---
+
+## Phase 13：辨識降本評估 ＋ 兩段式辨識路由（low thinking → 判錯前升級複核）
+
+**日期**：2026-08-25
+**觸發**：用戶要求試算月成本（3,000 人次 × 100 字辨識），並在成本／品質間找最佳化；期間依用戶要求評估本地小模型可行性
+
+### 完成項目
+
+1. **成本實測與試算**（scratchpad 實驗，未入 repo）
+   - 實測 `gemini-3-flash-preview` 每次辨識：input 固定 1,213 tokens（影像 360/640px 同價，media_resolution 預設 high）＋ thinking 600–1,000（難字可至 2,700+）；30 萬次/月 ≈ US$1,006
+   - `thinking_level="low"`：24 字同圖 A/B → 23/24 答案相同（僅「箍」由對變錯）、平均延遲 7.31s→4.15s、月估 $572
+   - `media_resolution="low"` 否決（複雜字失敗、flash-lite 自信答錯）；「驗證題」提示詞框架否決（嚴格版誤殺正樣本 58–67%、寬容版漏抓形近錯字）
+2. **本地小模型評估（否決，含實測）**
+   - PaddleOCR `chinese_cht_PP-OCRv3_mobile_rec`：AI-FREE 真人手寫 440 張 top-1 24.3%、合成扭曲宋體 8/24（同圖 Gemini 17/24）；閘門模擬誤放 0% 但覆蓋僅 5–12.5%（≈只省 $50/月）→ 淘汰
+   - AI-FREE 資料集僅資料＋教學 notebook、無成品權重；若日後走本地應訓練單字分類器而非微調 OCR 行模型
+   - 實驗紀錄（重生圖＋逐輪 console log）發佈為 Artifact：https://claude.ai/code/artifact/7c7d6fd7-5159-4427-b440-3848afb21049
+3. **兩段式辨識路由**（`backend/main.py`）
+   - `_recognize_with_gemini(image_data_b64, thinking_level=None)`：新增 thinking_level 參數
+   - `/api/recognize`：先跑 `thinking_level="low"`，結果＝預期字即回傳；不符或失敗才以預設 thinking 複核後定判；兩段皆失敗回退 Vision API（原邏輯不變）
+   - 設計理由：寫對（多數流量）走便宜快路；貴的深思只花在「即將判學生寫錯」處，low 偶發誤判（箍→篩）由複核吸收
+
+### 發現與修正
+
+- **背景 shell 的 gcloud 活躍帳號被其他 session 切走**（gemini-marketing-deployer 無權讀 secret）→ 本機起服務時 GEMINI_API_KEY 取值失敗、全部請求落到「？」。修正：取 secret 一律加 `--account=teamfollowme-deployer@…` 明確指定。教訓：gcloud active account 是全域可變狀態，腳本不可依賴
+- AI-FREE zip 檔名為 UTF-8 flag 正常的中文，但 macOS `unzip` 解不了（Illegal byte sequence）；改用 Python zipfile 直讀
+
+### 測試結果
+
+- 本機 E2E（uvicorn:8010，seed 固定合成圖打 `/api/recognize`）：寫對 6/6 走單次 low（2.2–7.5s、conf 0.85）；寫錯形近字 3/3 觸發升級、認出實際的字（力／候／源）並判 False；「箍」品質回收成功（low 誤認 → 升級後判對）
+- Build：成功（Cloud Build，多階段 Docker）
+- 部署：成功（Cloud Run `rightwrite-00046-4s8`，asia-east1，取代 `rightwrite-00045-kxv`）
+- 線上 production 驗證：寫對（配 6.9s／姆 3.1s，True）；寫錯 3/3 升級判 False 並認出實際字；箍 True（1.7s）
+- 成本結論：月估 US$1,006 → 約 $500–650（依升級率；正確書寫佔比越高越省），多數學生等待時間約減半
+
+---
+
+## Phase 14：集章簿——學習目標、硃砂印章與家長獎品兌換（Phase A＋B）
+
+**日期**：2026-08-25
+**觸發**：用戶要求實作「學生／家長目標設定＋目標達成率」；經 AskUserQuestion 決策：A＋B 一次做、家長區用 4 位數 PIN
+
+### 完成項目
+
+1. **資料層**（IndexedDB v2）
+   - `storage/db.ts`：DB_VERSION 1→2，新增 `stamps`（byProfile index）與 `parentSettings` 兩個 store，upgrade 沿用 contains-check 冪等模式
+   - `storage/stampStore.ts`：印章 CRUD、`redeemStamps` 消耗最舊 N 枚（集點卡歸零重來，紀錄保留）
+   - `storage/parentStore.ts`：家長設定（週目標／獎品清單）＋ PIN（SHA-256(pin:profileId)，定位為 speed bump 非安全邊界）
+2. **規則引擎**（`rewards/stampEngine.ts`，純函式）
+   - 五種印章：首練印／滿分印（全對且題數>0）／週達印（ISO 週、本地時區、週一起算）／連三印（連續三天有練習）／百字印（累計訂正每滿 100，落後里程碑一次補齊）
+   - 以 (type, scopeKey) 去重；`rewards/weekKey.ts` 提供 ISO 週鍵
+   - `rewards/awardStamps.ts`：掛在 `recordSession` 成功之後（ArticlePractice），透過 `onFinish(results, stampAward)` 傳遞
+3. **UI**（墨韻硃砂學院風，印章＝硃砂印視覺）
+   - `rewards/StampSeal.tsx`：CSS 硃砂印章元件（stamp-thump 蓋章動畫、已兌換淡化）
+   - ResultView：新章「蓋章囉！」overlay（逐枚蓋下）＋本週/集章進度列
+   - `rewards/RewardStrip.tsx`：首頁進度條（本週 X/Y 次＋集章 X/N 枚換「獎品」），點擊進集章簿
+   - `rewards/StampBook.tsx`：集點卡（N 格 punch grid）／印章牆／兌換紀錄／家長區（PIN 設定→輸入→開啟；忘記 PIN 兩段式重設，獎品設定保留；集滿才可按確認兌換）
+   - App 新增 stage `"stampbook"`；個人化關閉或無 profile 時整套 UI 隱藏
+4. **測試**：`rewards/__tests__/stampEngine.test.ts`（11 項：五規則＋去重＋週界）、`stampStores.test.ts`（6 項：最舊優先消耗、PIN roundtrip、activeReward）；`db.test.ts` 店數 4→6 更新
+
+### 發現與修正
+
+- **測試資料踩到 ISO 週界**：T0=週二，往前推 2 天落在上一 ISO 週（週日屬 W34），週達印測試失敗——引擎行為正確、測試資料改為同週三天。連帶確認「連三印」跨週合法、「週達印」嚴格按 ISO 週
+- 本機 :8000 被其他專案服務佔用且 Vite proxy 寫死 :8000 → E2E 改打 `backend/static` 產物直出的 :8010（production-like，反而更接近線上組態）
+
+### 測試結果
+
+- 前端：`vitest` 74/74（新增 17 項）；`tsc -b`＋`vite build` 通過；`eslint` 維持既有 5 筆債、無新增
+- 真實瀏覽器 E2E（Chrome × :8010）：開個人化→建「測試豆」→句子改錯直接交卷→「蓋章囉！」首練印動畫＋已集 1 枚＋本週 1/3→首頁進度條即時更新→集章簿設 PIN 1234→設獎品「去動物園玩一天」×10→集點卡第 1 格已蓋、還差 9 枚、兌換鈕正確鎖定→reload 後全部持久（v1→v2 migration 正常）
+- Build/部署：成功（Cloud Run `rightwrite-00047-vv8`，asia-east1，取代 00046-4s8）；線上驗證：正式站開個人化→建「小豆」→集章進度條正常顯示（本週 0/3、已集 0 枚），IndexedDB v2 於 production 正常
+
+---
+
+## Phase 15：印章收集簿口語化；出題不再沿用上次、錯字改以同音為主
+
+**日期**：2026-09-06
+**觸發**：用戶回報三件事——（1）「滿分印」改「滿分章」、「集章簿」改「印章收集簿」、其他標題儘量口語化；（2）小朋友反映選單一課時第二次做的題目跟第一次幾乎一樣；（3）出題會挑到形狀類似但不同音的錯字，句子讀起來聯想不起來
+
+### 完成項目
+
+1. **印章收集簿文案口語化**
+   - `rewards/types.ts` STAMP_LABELS：首練印→新手章、滿分印→滿分章、週達印→本週達標章、連三印→連三天章、百字印→一百字章（印面兩字同步改「新手」「達標」）
+   - `rewards/StampBook.tsx`：集點卡→我要換的獎品、我的印章→我蓋到的章、兌換紀錄→換過的獎品、家長設定→爸爸媽媽專區；「枚」一律改「個」；家長欄位改「一個禮拜要練習幾次」「集滿要換什麼獎品」「要集滿幾個章」
+   - 印章下方原本只顯示裸日期「9/6」，用戶問那是什麼意思 → 改成「8月25日蓋的」
+   - `RewardStrip.tsx`／`ResultView.tsx` 連帶改（「本週」→「這禮拜」、「兌換」→「換」）
+
+2. **同一課連做兩次不再出同一批題目**
+   - 根因：單課可用詞語只有 8～11 個（實測 4_kangxuan 各課 8–11、115_1_4_kangxuan 7–13），一次要出 5～8 題，`random.sample` 兩次的重疊率平均 45%、最高 100%
+   - `storage/recentQuestionsStore.ts`（新）：localStorage 記最近 3 輪的詞與 60 組「詞|正字|錯字」，key 含 profileId＋grade＋課別範圍。刻意不用 IndexedDB／profile，沒開個人化的裝置也要能輪替
+   - `main.py _pick_words_with_rotation`：詞池切成 fresh／stale，新詞優先抽完，不夠才從「最久沒出現的那一輪」補；選完再打散順序
+   - `main.py _pick_variant`：同一個詞換不同的錯字組合，重複的詞看起來也不一樣
+   - 單課題庫擴充：詞語數 < 16 時把「沒被任何詞語收進來的生字」拉進題庫（這些生字原本永遠不會被考到，補進來同時修掉這個死角）
+   - 實測（各課連做 4 輪 ×6 次）：連續兩輪詞語重疊率 45% → 2%（115_1_4_kangxuan 43% → 0%）
+
+3. **錯字改以同音為主**
+   - 根因：`similar_wrong` 是「字形相似」清單，全資料集 24.1% 的配對讀音完全不同（耳→聞、投→殺、憑→媽、與→學）。改錯字考的是「這個音該寫哪個字」，讀音差很遠的錯字只會變成語意不通的怪句
+   - `main.py _sound_tier`：用 pypinyin 把候選分成 0=完全同音／1=同音不同調／2=讀音不同；`_pick_variant` 只有整個詞湊不出同音／近音候選時（全資料集僅 0.6% 的生字）才用第 2 級
+   - `vocab_data.get_known_characters()`：以整份 vocab_all.json 出現過的 2987 個字當「小朋友看過的字」判準，在同一讀音等級內排前面，避開「幸→婞」「束→庶」這種課本不教的同音字
+   - 實測（三版本 × 各課 ×3 輪，655 題）：不同音 34.3% → 0.8%，冷僻錯字 5.1% → 1.2%
+
+4. **句子多樣性**：Gemini prompt 加隨機情境（10 選 1）＋「不要用課本標準例句」，temperature 0.9→1.1；造句失敗時的墊底句子從單一句型擴成 4＋3 種
+
+### 發現與修正
+
+- **pypinyin 的 heteronym 會吐罕用音**：`抗` 除了 kang4 還有 gang1、`爾` 除了 er3 還有 mi3/ni3，開 heteronym 會把「康→抗」判成完全同音，反而選出唸起來不像的錯字 → 改用常用讀音（`heteronym=False`）
+- **詞語輪替救不了太小的詞池**：第一版只做輪替，單課 8 個詞出 7 題時重疊仍高達 5/7（數學上無解）→ 必須同時擴大題庫（拉進未涵蓋生字）
+
+### 測試結果
+
+- 後端：`pytest` 29/29（新增 `tests/test_rotation.py` 13 項：詞語輪替、錯字變體、同音分級、常見字優先、真實資料端到端）
+- 前端：`vitest` 80/80（新增 `recentQuestionsStore.test.ts` 6 項）；`tsc -b`＋`vite build` 通過；`eslint` 維持既有 5 筆債、無新增
+- 真實瀏覽器 E2E（Chrome × :8010 production build）：印章收集簿全部新文案正確顯示（含「8月25日蓋的」）→ 自訂範圍選第 2 課 → 練習 → 再練習一次 → localStorage 記到兩輪，第二輪與第一輪詞語 0 重疊
+- Build/部署：成功（Cloud Run `rightwrite-00049-nkz`，asia-east1，取代 00047-vv8）；線上驗證：同一課連打兩次 `/api/generate`（第二次帶 recent_rounds）→ 重複的詞 0 個、錯字全為同音／近音、無冷僻字；線上 bundle 確認新文案已生效、舊字串已消失
+
+---
+
 ## TODO
 
-- [ ] Enable Cloud Vision API on GCP project (currently disabled — would improve recognition as primary method)
-- [ ] Investigate `gemini-3-flash-preview` recognition quality for children's handwriting
+- [ ] Phase 15 follow-up — 輪替紀錄存在 localStorage，換裝置／清瀏覽器會歸零（回到「可能跟上次撞題」）；若要跨裝置，需併入 Phase C 同步
+- [ ] Phase 15 follow-up — `similar_wrong` 資料本身有雜訊（憑→媽、蓓→部 既不同音也不相似）；同音分級目前把它們濾掉了，但根治要回頭清 `scripts/` 產資料那一段
+- [ ] Phase 14 follow-up — 兌換後自動建議下一張集點卡（目前兌換後需家長重新填寫獎品；可加「再來一張」快速鍵帶入上次設定）
+- [ ] Phase 14 follow-up — 集章資料 local-first：換裝置／清瀏覽器會歸零；若家長反映，屆時併入跨裝置同步（Phase C，需後端）
+- [ ] Phase 14 follow-up — 滿分章（Phase 15 前叫「滿分印」）目前每次滿分都蓋（scope=sessionId），觀察是否被「刷短範圍」灌水；必要時改每日上限
+- [ ] Phase 13 follow-up — 上線後以 Cloud Run log 監控「Gemini(escalated)」出現率（＝升級率），一週後回算實際月成本；若升級率異常高，檢查是否 low 模型行為飄移
+- [ ] Phase 13 follow-up — `_recognize_with_gemini` 兩段呼叫目前串行，寫錯情境延遲 9–16s；若體感太慢可考慮 streaming 提示或前端進度動畫
+- [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
+- [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
+- [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
+- [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
+- [x] ~~Enable Cloud Vision API on GCP project~~ — already enabled (`vision.googleapis.com`); the prior note was stale. Vision is now the fallback engine
 - [ ] Manual end-to-end check of personalization on the live site: create profile → practice → 📊 dashboard SVG trend chart
-- [ ] Pre-existing lint debt (5 errors in `ResultView.tsx` / `LessonSelector.tsx` from before personalization) — not gating, clean up when convenient
+- [ ] Pre-existing lint debt (5 errors: `ResultView.tsx` ×3, `LessonSelector.tsx` ×1 `setLessonsLoading` in effect, `ArticlePractice.tsx` ×1 unused `_drawnChar`) — not gating, clean up when convenient
+- [ ] Phase 12 follow-up — 無課次特殊單元不在練習範圍：一上南一「魔法文字」18 字、一上康軒 10 字、六下翰林 35 字（實驗室表課次為空、`build_vocab_json.py` 以 `第N課` 篩檔）。若要納入，需在 build 給它們一個虛擬課次並在 UI 標示
+- [ ] Phase 12 follow-up — 115上 共 3,300 餘新字的 `similar_wrong` 全由「同音旁字 ≥3 → 同音字」自動產生（`curated_similar_wrong.json` 只有 400 字、偏四下康軒），建議抽查幾課確認錯字候選合理，必要時擴充 curated
+- [ ] Phase 12 follow-up — 偏好刻意未記「課次範圍」（每週變動）；若老師反映想記，`Preferences` 加 `startLesson/endLesson` 並依 `total_lessons` clamp 即可
+- [ ] 下學期（115下）資料到時：`python scripts/download_vocab_excel.py --year 115_2` → `build_vocab_json.py` 的 `TERMS` 對照表加一筆（注意 114下 仍要保留 legacy id）→ 重跑 build；前端 radio 會自動多一個選項，`DEFAULT_TERM` 視需要改
 - [ ] Optional follow-up: make `recordSession` atomic for session + charStats (single IDB transaction; images stay best-effort due to async quota check)
 - [ ] Delete merged remote branches `feat/personalization` and `fix/recharts-prod-crash`
 - [x] ~~Parse downloaded Excel files to extend `vocab_data.py` for other grades/publishers~~

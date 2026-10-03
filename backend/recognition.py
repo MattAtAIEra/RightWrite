@@ -1,7 +1,9 @@
 """
 手寫字辨識 — 改錯字神器與一字千金共用。
 
-辨識順序：Google Cloud Vision → Gemini Vision。
+一字千金走 recognize_character：Google Cloud Vision → Gemini Vision。
+改錯字神器在 main.py 自己排程：Gemini(thinking low) → 不符時升級成預設思考 → Vision。
+兩邊的輸出都會先轉成繁體再比對。
 兩者都沒設定憑證時（本機開發）進入「備援模式」：只要畫面上有筆跡就視為答對（信心值 0.5），
 讓沒有金鑰的環境也能試玩；有設定憑證但全部失敗時則視為答錯，不會誤判成對。
 """
@@ -29,6 +31,37 @@ def _strip_data_url(image_data_b64: str) -> str:
     return image_data_b64
 
 
+_opencc_converter = None
+
+
+def normalize_to_traditional(char: str) -> str:
+    """盡力把簡體字轉成台灣標準繁體字。
+
+    辨識引擎偶爾會回簡體（學->学、過->过、為->为），生字表全是繁體，
+    不轉的話寫對的字也會被判錯。OpenCC 不可用時原樣回傳。
+    """
+    global _opencc_converter
+    if not char:
+        return char
+    try:
+        if _opencc_converter is None:
+            from opencc import OpenCC
+
+            _opencc_converter = OpenCC("s2tw")
+        return _opencc_converter.convert(char)
+    except Exception as e:  # pragma: no cover - OpenCC 是選配
+        logger.warning("OpenCC normalization unavailable: %s", e)
+        return char
+
+
+def first_cjk(text: str) -> str | None:
+    """取出字串裡第一個中文字，略過雜訊與標點。"""
+    for c in text:
+        if "一" <= c <= "鿿":
+            return c
+    return None
+
+
 def recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
     """用 Google Cloud Vision API 辨識手寫中文字，回傳 (第一個字, 信心值)。"""
     from google.cloud import vision
@@ -37,43 +70,62 @@ def recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
 
     client = vision.ImageAnnotatorClient()
     image = vision.Image(content=image_bytes)
-    context = vision.ImageContext(language_hints=["zh-Hant", "zh"])
+    # 提示繁體中文（台灣），並用偏向手寫文件的 document 偵測器，而不是稀疏文字偵測
+    image_context = vision.ImageContext(language_hints=["zh-Hant", "zh-TW"])
+    response = client.document_text_detection(image=image, image_context=image_context)
 
-    response = client.text_detection(image=image, image_context=context)
-    texts = response.text_annotations
+    text = (response.full_text_annotation.text or "").strip()
+    if not text and response.text_annotations:
+        text = response.text_annotations[0].description.strip()
 
-    if texts:
-        recognized = texts[0].description.strip()
-        if recognized:
-            return recognized[0], 0.9
+    # 只留第一個中文字，把九宮格格線或雜訊丟掉
+    char = first_cjk(text)
+    if char:
+        return normalize_to_traditional(char), 0.9
     raise ValueError("No text recognized")
 
 
-def recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
-    """用 Gemini Vision 辨識手寫中文字，回傳 (字, 信心值)。"""
+def recognize_with_gemini(
+    image_data_b64: str, thinking_level: str | None = None
+) -> tuple[str, float]:
+    """用 Gemini Vision 辨識手寫中文字，回傳 (字, 信心值)。
+
+    thinking_level="low" 便宜又快很多；None 維持模型預設的深度思考。
+    """
     from google import genai
     from google.genai import types
+
+    config = None
+    if thinking_level:
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=thinking_level)
+        )
 
     client = genai.Client()
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
+        config=config,
         contents=[
             types.Part.from_bytes(
                 data=base64.b64decode(_strip_data_url(image_data_b64)),
                 mime_type="image/png",
             ),
             (
-                "這張圖片是一個手寫的中文字（寫在九宮格上）。"
-                "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
-                "如果完全無法辨識，只回覆 ？"
+                "這是一名台灣國小學童手寫的『單一個』中文字，"
+                "寫在九宮格（米字格）上，筆畫可能不夠工整、比例不一、線條歪斜。"
+                "請以繁體中文（台灣教育部標準字形）的角度辨識這個字，"
+                "並務必輸出對應的『繁體字』，絕對不要輸出簡體字。"
+                "只回覆那一個繁體中文字，不要附加任何注音、拼音、說明或標點符號。"
+                "如果真的完全無法辨識，才回覆 ？"
             ),
         ],
     )
 
     recognized = (response.text or "").strip()
-    # 只接受單一個中文字
-    if len(recognized) == 1 and "一" <= recognized <= "鿿":
-        return recognized, 0.85
+    # 容忍多餘的空白或標點：取第一個中文字
+    char = first_cjk(recognized)
+    if char:
+        return normalize_to_traditional(char), 0.85
     raise ValueError(f"Could not recognize character: {recognized!r}")
 
 

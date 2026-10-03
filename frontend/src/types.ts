@@ -3,6 +3,10 @@ export interface GradeOption {
   label: string;
   grade: string;
   publisher: string;
+  /** 學年度_學期, e.g. "115_1" */
+  term: string;
+  /** e.g. "115上學期" */
+  term_label: string;
 }
 
 export interface GradesResponse {
@@ -49,5 +53,5 @@ export interface RecognizeResponse {
   confidence: number;
 }
 
-export type AppStage = "select" | "practice" | "result" | "dashboard";
+export type AppStage = "select" | "practice" | "result" | "dashboard" | "stampbook";
 export type PracticeMode = "sentence" | "article";

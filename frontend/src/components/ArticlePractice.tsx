@@ -3,9 +3,13 @@ import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
 import { usePersonalization } from "../personalization/PersonalizationContext";
+import { usePreferences } from "../personalization/PreferencesContext";
 import { recordSession } from "../storage/sessionStore";
+import { awardStampsForSession } from "../rewards/awardStamps";
+import type { StampAward } from "../rewards/types";
 import { listByProfile as listCharStats } from "../storage/charStatsStore";
 import { buildWeightedChars } from "../personalization/weights";
+import { loadRecentQuestions, pushRound } from "../storage/recentQuestionsStore";
 import type { PracticeEvent } from "../storage/types";
 import QuotaModal from "../personalization/QuotaModal";
 
@@ -15,7 +19,7 @@ interface Props {
   practiceMode: PracticeMode;
   gradeId: string;
   gradeLabel: string;
-  onFinish: (results: AnswerResult[]) => void;
+  onFinish: (results: AnswerResult[], stampAward?: StampAward | null) => void;
   onBack: () => void;
 }
 
@@ -64,10 +68,13 @@ export default function ArticlePractice({
     char: string;
     wrongChar: WrongChar | null; // null = this is a correct char
   } | null>(null);
-  const [showZhuyin, setShowZhuyin] = useState(false);
+  const { prefs, setPrefs } = usePreferences();
+  const showZhuyin = prefs.showZhuyin;
+  const toggleZhuyin = () => setPrefs({ showZhuyin: !showZhuyin });
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
+  const [pendingAward, setPendingAward] = useState<StampAward | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -80,9 +87,19 @@ export default function ArticlePractice({
         const built = buildWeightedChars(gradeStats);
         if (Object.keys(built).length > 0) weightedChars = built;
       }
+      const recentKey = {
+        profileId: personalization.activeProfile?.id ?? null,
+        gradeId,
+        startLesson,
+        endLesson,
+      };
       try {
-        const article = await generateArticle(startLesson, endLesson, practiceMode, gradeId, weightedChars);
+        const article = await generateArticle(
+          startLesson, endLesson, practiceMode, gradeId, weightedChars,
+          loadRecentQuestions(recentKey),
+        );
         setArticle(article);
+        pushRound(recentKey, article.wrong_chars);
       } catch {
         alert("生成文章失敗，請重試");
       } finally {
@@ -289,6 +306,7 @@ export default function ArticlePractice({
     }
 
     let needsModal = false;
+    let stampAward: StampAward | null = null;
     if (personalization.enabled && personalization.activeProfile) {
       const events: PracticeEvent[] = allResults.map((r) => ({
         type: r.type,
@@ -314,6 +332,11 @@ export default function ArticlePractice({
           events,
         });
         needsModal = result.quotaState === "block" || result.quotaState === "warn";
+        try {
+          stampAward = await awardStampsForSession(result.session);
+        } catch (err) {
+          console.error("Failed to award stamps", err);
+        }
       } catch (err) {
         console.error("Failed to record session", err);
       }
@@ -323,10 +346,11 @@ export default function ArticlePractice({
       // Store results and show modal; onFinish triggers when modal closes
       setShowQuotaModal(true);
       setPendingResults(allResults);
+      setPendingAward(stampAward);
       return;
     }
 
-    onFinish(allResults);
+    onFinish(allResults, stampAward);
   };
 
   const answeredCount = [...annotations.values()].filter((a) => !a.pending).length;
@@ -464,7 +488,7 @@ export default function ArticlePractice({
         </div>
         <button
           className="zhuyin-toggle-btn"
-          onClick={() => setShowZhuyin((v) => !v)}
+          onClick={toggleZhuyin}
         >
           {showZhuyin ? "隱藏注音" : "顯示注音"}
         </button>
@@ -505,7 +529,7 @@ export default function ArticlePractice({
             if (pendingResults) {
               const r = pendingResults;
               setPendingResults(null);
-              onFinish(r);
+              onFinish(r, pendingAward);
             }
           }}
         />

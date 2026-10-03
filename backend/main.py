@@ -8,6 +8,7 @@ import math
 import os
 import random
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Sequence, TypeVar
 
@@ -23,6 +24,7 @@ from pydantic import BaseModel
 from vocab_data import (
     get_grade_registry,
     get_grade_info,
+    get_known_characters,
     get_vocab_data,
     get_all_characters_in_range,
     get_all_compounds_in_range,
@@ -83,6 +85,10 @@ class GenerateArticleRequest(BaseModel):
     mode: str = "article"  # "sentence" or "article"
     grade_id: str = "grade4"
     weighted_chars: dict[str, float] | None = None  # NEW
+    # 前幾次練習出過的詞,最近的一輪排在最前面。用來避免同一課連做兩次拿到同一批題目。
+    recent_rounds: list[list[str]] | None = None
+    # 前幾次出過的「詞|正字|錯字」變體,用來讓重複的詞至少換一個錯字。
+    recent_variants: list[str] | None = None
 
 
 class GenerateArticleResponse(BaseModel):
@@ -145,19 +151,164 @@ def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grad
     return lookup
 
 
+@lru_cache(maxsize=8192)
+def _reading(char: str) -> tuple[str, str]:
+    """(含聲調的常用讀音, 去掉聲調的讀音),例如 稻 → ("dao4", "dao")。
+
+    刻意不開 heteronym:pypinyin 會連罕用音一起吐出來(抗 除了 kang4 還有
+    gang1),那樣 康 跟 抗 會被判成完全同音,反而選出小朋友唸起來不像的錯字。
+    """
+    toned = pinyin(char, style=Style.TONE3, heteronym=False)[0][0]
+    return toned, toned.rstrip("12345")
+
+
+def _sound_tier(correct: str, wrong: str) -> int:
+    """錯字跟正字的讀音有多近:0=完全同音、1=同音不同調、2=讀音不同。
+
+    改錯字要考的是「這個音該寫哪個字」。字形像但讀音差很遠的錯字(耳→聞、
+    投→殺)放進句子裡只會變成語意不通的怪句,小朋友是靠「讀不順」發現的,
+    不是靠辨字。資料裡這種配對佔了兩成多,所以挑錯字時要按讀音分級。
+    """
+    correct_toned, correct_base = _reading(correct)
+    wrong_toned, wrong_base = _reading(wrong)
+    if correct_toned == wrong_toned:
+        return 0
+    if correct_base == wrong_base:
+        return 1
+    return 2
+
+
+# Gemini 造句失敗、課本又沒例句時的墊底句子。多備幾種,免得同一篇裡好幾句
+# 長得一模一樣。
+_FALLBACK_CHAR_SENTENCES = [
+    "這一課學到的{}字,你會寫嗎?",
+    "老師在黑板上寫了一個{}字。",
+    "他把{}字寫得又大又工整。",
+    "考試的時候,他把{}字寫錯了。",
+]
+_FALLBACK_WORD_SENTENCES = [
+    "他學會了{}這個詞語。",
+    "老師請大家用{}造一個句子。",
+    "這一課的生詞裡有{}。",
+]
+
+
+def _plain_sentence(word: str) -> str:
+    pool = _FALLBACK_CHAR_SENTENCES if len(word) == 1 else _FALLBACK_WORD_SENTENCES
+    return random.choice(pool).format(word)
+
+
+def _pick_words_with_rotation(
+    usable: list[dict],
+    num_wrong: int,
+    weighted_chars: dict[str, float] | None,
+    recent_rounds: list[list[str]] | None,
+) -> list[dict]:
+    """從可用詞語中挑 num_wrong 個,盡量避開最近幾輪出過的詞。
+
+    單課的可用詞語只有 8～11 個,而一次要出 5～8 題,純 random.sample 兩次
+    的重疊率高達六到八成——小朋友會直接說「跟上次一樣」。所以先把詞池切成
+    「這幾輪沒出過的」跟「出過的」,新詞優先抽完,真的不夠才從舊詞補,而且
+    從最久沒出現的那一輪開始補。
+    """
+    # word -> 最近一次出現在第幾輪(0 = 上一次練習)
+    rank: dict[str, int] = {}
+    for round_index, words in enumerate(recent_rounds or []):
+        for w in words:
+            rank.setdefault(w, round_index)
+
+    fresh = [c for c in usable if c["word"] not in rank]
+    stale = [c for c in usable if c["word"] in rank]
+
+    def take(pool: list[dict], k: int) -> list[dict]:
+        if k <= 0 or not pool:
+            return []
+        if weighted_chars:
+            weights = [
+                max((weighted_chars.get(ch, 1.0) for _, ch in c["_swappable"]), default=1.0)
+                for c in pool
+            ]
+            return _weighted_sample_without_replacement(pool, weights, k)
+        return random.sample(pool, min(k, len(pool)))
+
+    selected = take(fresh, num_wrong)
+    if len(selected) < num_wrong:
+        # 同一輪內先打散,再依「越舊越先補」排序(stable sort 保留打散結果)
+        random.shuffle(stale)
+        stale.sort(key=lambda c: rank[c["word"]], reverse=True)
+        selected += stale[: num_wrong - len(selected)]
+
+    # 題目順序也打散,免得重疊的詞每次都出現在同一個位置
+    random.shuffle(selected)
+    return selected
+
+
+def _pick_variant(
+    comp_info: dict,
+    char_lookup: dict[str, list[str]],
+    recent_variants: set[str],
+) -> tuple[int, str, str]:
+    """替一個詞挑「哪個字寫錯、錯成哪個字」。
+
+    先按讀音分級(同音 > 同音不同調 > 不同音),同一級之內讓課本出現過的字
+    優先(不然會挑到「婞」這種小朋友沒看過的同音字),再優先挑最近沒用過的
+    組合。同一個詞本來就有好幾種考法(「環境」可以錯「環」也可以錯
+    「境」,「境」又可以錯成敬／靜／竟),所以就算詞重複了,題目還是不一樣。
+    """
+    word = comp_info["word"]
+    known = get_known_characters()
+    groups: dict[tuple[int, int], list[tuple[int, str, str]]] = {}
+    for idx, ch in comp_info["_swappable"]:
+        for wrong in char_lookup[ch]:
+            key = (_sound_tier(ch, wrong), 0 if wrong in known else 1)
+            groups.setdefault(key, []).append((idx, ch, wrong))
+
+    # 讀音相近排第一順位,同一級之內再讓課本出現過的字排前面。
+    # 只有在整個詞連一個同音/近音錯字都湊不出來時,才退而用讀音不同的。
+    order = [k for k in sorted(groups) if k[0] <= 1] or sorted(groups)
+    for key in order:
+        unused = [o for o in groups[key] if f"{word}|{o[1]}|{o[2]}" not in recent_variants]
+        if unused:
+            return random.choice(unused)
+    # 該考的都考過了 → 回到最合適的那一組重來
+    return random.choice(groups[order[0]])
+
+
+# 一次最多出 8 題;題庫至少要有它的兩倍,下一次才有足夠的新題目可以換。
+_MIN_POOL_FOR_ROTATION = 16
+
+# 造句情境:每次抽一個帶進 prompt,同一個詞第二次出現時句子才不會又是同一句。
+_SENTENCE_FLAVOURS = [
+    "校園生活",
+    "家裡的日常",
+    "動物或大自然",
+    "運動和遊戲",
+    "節慶或旅行",
+    "科學小知識",
+    "和朋友相處",
+    "吃的東西",
+    "天氣與四季",
+    "幫忙做家事",
+]
+
+
 def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
     """Use Gemini to generate natural sentences, each containing one of the given words."""
     from google import genai
     from google.genai import types
 
     words_list = "、".join(words)
+    flavour = random.choice(_SENTENCE_FLAVOURS)
     prompt = (
         f"請為以下每個詞語各造一個適合國小四年級學生閱讀的句子。\n"
         f"詞語：{words_list}\n\n"
         f"規則：\n"
         f"- 每個詞語造一個句子，句子長度 15～30 字\n"
         f"- 句子必須完整包含該詞語（不可拆開或變形）\n"
+        f"- 清單裡若是單個字，請把它用在一個常見的詞裡，讓句子讀起來自然\n"
         f"- 用字遣詞要符合國小四年級程度\n"
+        f"- 這批句子的情境請圍繞「{flavour}」，但每一句的畫面不要重複\n"
+        f"- 請寫全新的句子，不要用課本或字典裡的標準例句\n"
         f"- 每行一個句子，句子結尾要有句號\n"
         f"- 只輸出句子，不要編號、不要詞語標示、不要任何多餘文字\n"
         f"- 共 {len(words)} 個句子，順序與詞語順序一致"
@@ -169,7 +320,7 @@ def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=256),
-            temperature=0.9,
+            temperature=1.1,
         ),
     )
 
@@ -185,6 +336,8 @@ def generate_article_with_errors(
     mode: str = "article",
     grade_id: str = "grade4",
     weighted_chars: dict[str, float] | None = None,
+    recent_rounds: list[list[str]] | None = None,
+    recent_variants: list[str] | None = None,
 ) -> dict:
     """
     Generate content with wrong characters from the selected lessons.
@@ -204,6 +357,24 @@ def generate_article_with_errors(
             continue
         usable.append({**comp, "_swappable": swappable})
 
+    # 只選一課時,有詞語的題目只有 8～11 個,一次就要出 5～8 題,連做兩次一定
+    # 撞在一起。這時把「沒被任何詞語收進來的生字」也拉進題庫——這些生字本來
+    # 就永遠不會被考到,補進來既擴大題庫又補上死角。範圍夠大(約兩課以上)就
+    # 維持原本只用詞語的做法,上下文比較充足。
+    if len(usable) < _MIN_POOL_FOR_ROTATION:
+        covered = {ch for comp in usable for ch in comp["word"]}
+        for c in get_all_characters_in_range(start_lesson, end_lesson, grade_id):
+            if c["char"] in covered or not c["similar_wrong"]:
+                continue
+            covered.add(c["char"])
+            usable.append({
+                "word": c["char"],
+                "examples": c.get("examples", []),
+                "lesson": c["lesson"],
+                "lesson_title": c["lesson_title"],
+                "_swappable": [(0, c["char"])],
+            })
+
     if not usable:
         raise HTTPException(status_code=400, detail="No usable compounds found for the selected range")
 
@@ -212,18 +383,9 @@ def generate_article_with_errors(
     else:
         num_wrong = min(random.randint(5, 8), len(usable))
 
-    if weighted_chars:
-        item_weights = [
-            max(
-                (weighted_chars.get(ch, 1.0) for _, ch in comp["_swappable"]),
-                default=1.0,
-            )
-            for comp in usable
-        ]
-        selected = _weighted_sample_without_replacement(usable, item_weights, num_wrong)
-    else:
-        selected = random.sample(usable, num_wrong)
+    selected = _pick_words_with_rotation(usable, num_wrong, weighted_chars, recent_rounds)
     words = [comp["word"] for comp in selected]
+    recent_variant_set = set(recent_variants or [])
 
     # Generate sentences with Gemini
     try:
@@ -234,7 +396,7 @@ def generate_article_with_errors(
         sentences = []
         for comp in selected:
             examples = [ex for ex in comp.get("examples", []) if comp["word"] in ex]
-            sentences.append(random.choice(examples) if examples else f"他學會了{comp['word']}這個詞語。")
+            sentences.append(random.choice(examples) if examples else _plain_sentence(comp["word"]))
 
     wrong_chars_info = []
     original_lines = []
@@ -249,11 +411,11 @@ def generate_article_with_errors(
         # Verify the word appears in the sentence; fallback if not
         if word not in original_sentence:
             examples = [ex for ex in comp_info.get("examples", []) if word in ex]
-            original_sentence = random.choice(examples) if examples else f"他學會了{word}這個詞語。"
+            original_sentence = random.choice(examples) if examples else _plain_sentence(word)
 
-        # Pick a random swappable character from the word
-        _idx, correct_char = random.choice(comp_info["_swappable"])
-        wrong_char = random.choice(char_lookup[correct_char])
+        # Pick which character is wrong and what it becomes — avoiding the
+        # combinations this profile just saw, so a repeated word still reads new
+        _idx, correct_char, wrong_char = _pick_variant(comp_info, char_lookup, recent_variant_set)
 
         # Build the wrong version of the word, then replace in sentence
         wrong_word = word[:_idx] + wrong_char + word[_idx + 1:]
@@ -307,6 +469,9 @@ def get_grades():
             "label": info["label"],
             "grade": info["grade"],
             "publisher": info["publisher"],
+            "term": info.get("term", "114_2"),
+            "term_label": info.get("term_label", "114下學期"),
+            "semester": info["semester"],
         })
     return {"grades": grades}
 
@@ -347,6 +512,7 @@ def generate_article(req: GenerateArticleRequest):
 
     result = generate_article_with_errors(
         req.start_lesson, req.end_lesson, req.mode, req.grade_id, req.weighted_chars,
+        req.recent_rounds, req.recent_variants,
     )
     return result
 
@@ -355,35 +521,68 @@ def generate_article(req: GenerateArticleRequest):
 def recognize_handwriting(req: RecognizeRequest):
     """
     Recognize handwritten character from canvas image.
-    Tries Google Cloud Vision first, then Claude Vision as fallback.
+
+    Primary engine is Gemini multimodal — it handles messy single-character
+    handwriting from young students far better than sparse-text OCR. Google
+    Cloud Vision is the fallback. Both outputs are normalized to Traditional
+    Chinese before comparison, so a Simplified-form recognition never fails a
+    correctly written answer.
     """
     expected = req.expected_char
 
-    # Try Google Cloud Vision API first
+    # Primary: Gemini multimodal handwriting recognition, two-stage routing.
+    # Stage 1 runs with thinking_level="low" — a fraction of the cost/latency,
+    # and it agrees with the default-thinking output on nearly every input.
+    # Only when stage 1 would mark the answer wrong (mismatch or failure) do we
+    # escalate to a default-thinking pass, so the expensive call is spent
+    # exactly where a false "wrong" verdict would hurt the student.
+    recognized = None
+    confidence = 0.0
+    try:
+        recognized, confidence = _recognize_with_gemini(
+            req.image_data, thinking_level="low"
+        )
+        logger.info("Gemini(low) recognized: %s (expected: %s)", recognized, expected)
+        if recognized == expected:
+            return RecognizeResponse(
+                recognized_char=recognized,
+                is_correct=True,
+                confidence=confidence,
+            )
+    except Exception as e:
+        logger.warning("Gemini low-thinking pass failed: %s", e)
+
+    # Stage 2: verdict would be "wrong" — double-check with full thinking.
+    try:
+        recognized2, confidence2 = _recognize_with_gemini(req.image_data)
+        logger.info(
+            "Gemini(escalated) recognized: %s (expected: %s)", recognized2, expected
+        )
+        return RecognizeResponse(
+            recognized_char=recognized2,
+            is_correct=recognized2 == expected,
+            confidence=confidence2,
+        )
+    except Exception as e:
+        logger.warning("Gemini recognition failed: %s", e, exc_info=True)
+        if recognized is not None:
+            return RecognizeResponse(
+                recognized_char=recognized,
+                is_correct=recognized == expected,
+                confidence=confidence,
+            )
+
+    # Fallback: Google Cloud Vision API
     try:
         recognized, confidence = _recognize_with_vision_api(req.image_data)
         logger.info("Vision API recognized: %s (expected: %s)", recognized, expected)
-        is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
-            is_correct=is_correct,
+            is_correct=recognized == expected,
             confidence=confidence,
         )
     except Exception as e:
-        logger.warning("Vision API failed: %s", e, exc_info=True)
-
-    # Fallback: use Gemini Vision for handwriting recognition
-    try:
-        recognized, confidence = _recognize_with_gemini(req.image_data)
-        logger.info("Gemini recognized: %s (expected: %s)", recognized, expected)
-        is_correct = recognized == expected
-        return RecognizeResponse(
-            recognized_char=recognized,
-            is_correct=is_correct,
-            confidence=confidence,
-        )
-    except Exception as e:
-        logger.error("Gemini recognition failed: %s", e, exc_info=True)
+        logger.error("Vision API recognition failed: %s", e, exc_info=True)
 
     # Last resort: cannot recognize
     logger.error("All recognition methods failed for expected=%s", expected)
