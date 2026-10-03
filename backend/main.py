@@ -2,7 +2,6 @@
 RightWrite - 國小改錯字練習神器
 Backend API server
 """
-import base64
 import json
 import os
 import random
@@ -22,6 +21,8 @@ from vocab_data import (
     get_all_characters_in_range,
     get_all_compounds_in_range,
 )
+from recognition import recognize_with_vision_api as _recognize_with_vision_api
+import yzqj
 
 
 app = FastAPI(title="RightWrite API", version="1.0.0")
@@ -33,6 +34,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 一字千金（多人即時成語改錯競賽）
+app.include_router(yzqj.router)
+app.include_router(yzqj.ws_router)
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -253,30 +258,6 @@ def recognize_handwriting(req: RecognizeRequest):
         is_correct=True,
         confidence=0.5,
     )
-
-
-def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
-    """Use Google Cloud Vision API to recognize handwritten Chinese character."""
-    from google.cloud import vision
-
-    # Remove data URL prefix if present
-    if "," in image_data_b64:
-        image_data_b64 = image_data_b64.split(",", 1)[1]
-
-    image_bytes = base64.b64decode(image_data_b64)
-
-    client = vision.ImageAnnotatorClient()
-    image = vision.Image(content=image_bytes)
-
-    response = client.text_detection(image=image)
-    texts = response.text_annotations
-
-    if texts:
-        recognized = texts[0].description.strip()
-        # Take only the first character
-        if recognized:
-            return recognized[0], 0.9
-    raise ValueError("No text recognized")
 
 
 @app.post("/api/check")

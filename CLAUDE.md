@@ -1,6 +1,10 @@
 # RightWrite
 
-國小四年級國語改錯字練習應用（康軒版 114 學年度第 2 學期）。
+國小國語學習工具集。同一個前後端裡有三個入口：
+
+- `/` **國語學習樂園** — 入口 portal，連到下面兩個應用
+- `/rightwrite` **改錯字神器** — 單人改錯字練習（康軒版 114 學年度第 2 學期等）
+- `/yzqj`、`/g/{code}` **一字千金** — 多人即時成語改錯競賽（QR Code 加入、九宮格手寫、筆跡實況轉播、排名、成績後台）。細節見 `README-yzqj.md`
 
 ## Development Commands
 
@@ -14,6 +18,10 @@ npm run lint         # ESLint
 # Backend (FastAPI)
 cd backend && pip install -r requirements.txt
 uvicorn main:app --reload   # Dev server on :8000
+python -m pytest tests -q   # 一字千金整場流程的冒煙測試
+
+# Calligraphy font subset (re-run after editing backend/idioms_data.py)
+pip install fonttools brotli && python scripts/build_calligraphy_font.py
 
 # Vocab scraper
 cd scripts && python scrape_vocab.py   # Playwright-based, scrapes edu.tw textword API
@@ -35,7 +43,16 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 - `POST /api/check` — simple character comparison
 - `GET /{path}` — SPA static file serving
 
-**Dev proxy**: Vite proxies `/api` to `localhost:8000`. In production, both served from same origin on :8080.
+**一字千金 endpoints** (backend/yzqj.py):
+- `POST /api/yzqj/games` — create game → 3-char code + host_token
+- `GET /api/yzqj/games/{code}` / `POST .../join` — game info / join with nickname (records IP, max 10)
+- `WS /ws/yzqj/{code}?role=host&token=…` / `?role=player&player_id=…` — snapshots, stroke relay, submit
+- `GET /api/yzqj/admin/games` — results backoffice (header `X-Admin-Token` when `YZQJ_ADMIN_TOKEN` is set)
+
+**Frontend routing**: `frontend/src/main.tsx` picks the app by pathname (portal / rightwrite / yzqj);
+一字千金 has its own tiny history-API router in `src/yzqj/router.ts`.
+
+**Dev proxy**: Vite proxies `/api` and `/ws` to `localhost:8000`. In production, both served from same origin on :8080.
 
 **Build output**: Frontend builds directly into `backend/static/` which is gitignored. Backend serves these as static files with SPA fallback to index.html.
 
@@ -45,10 +62,17 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 
 **Article generation**: Uses predefined sentence templates (not LLM-generated). Randomly picks 5-8 characters from selected lesson range, inserts into templates, then swaps some with similar_wrong alternatives. Tracks wrong char positions in display text.
 
-**Vision API fallback**: `POST /api/recognize` tries Google Cloud Vision first; if unavailable, returns the expected character with 0.5 confidence (graceful degradation).
+**Vision API fallback**: `backend/recognition.py` tries Google Cloud Vision first; if unavailable, returns the expected character with 0.5 confidence (graceful degradation). 一字千金 additionally treats a blank canvas as wrong in fallback mode.
+
+**Game state** (backend/yzqj.py): all live games are in-process memory (`GAMES` dict) with asyncio timers; results are persisted to SQLite (`backend/yzqj_store.py`, path `YZQJ_DB_PATH`). Deploy as a single instance.
+
+**Calligraphy font**: `frontend/public/fonts/ARPLUKaiTW-yzqj.woff2` is a subset of AR PL UKai TW containing only the idiom characters. Regenerate with `scripts/build_calligraphy_font.py` whenever `backend/idioms_data.py` changes.
 
 **Environment variables**:
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
+- `YZQJ_ADMIN_TOKEN` — password for the 一字千金 results backoffice (unset = open)
+- `YZQJ_DB_PATH` — SQLite path for game results (default `backend/data/yzqj.sqlite3`)
+- `YZQJ_QUESTION_SECONDS` / `YZQJ_REVEAL_SECONDS` / `YZQJ_GRACE_SECONDS` — timing overrides (tests use short values)
 
 ## Frontend Aesthetics
 
@@ -78,6 +102,6 @@ When generating or modifying frontend UI, always follow these principles:
 ## Deployment
 
 Google Cloud Run on `asia-east1` via `cloudbuild.yaml`:
-- 512Mi memory, 1 CPU, 0-3 instances
+- 512Mi memory, 1 CPU, 0-1 instances (single instance: 一字千金 keeps game state in memory), request timeout 3600s for WebSockets
 - Port 8080, unauthenticated access
 - Multi-stage Dockerfile: frontend build → copy static assets into Python image
