@@ -15,9 +15,12 @@ function MiniGrid({ strokes, size = 150 }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    if (canvas.width !== size * dpr) {
-      canvas.width = size * dpr;
-      canvas.height = size * dpr;
+    // 寬高都要檢查：<canvas> 預設是 300×150，size=150、dpr=2 時寬度剛好等於 300，
+    // 只比寬度會跳過設定，height 留在 150，畫面就會被垂直拉長兩倍、下半截看不到。
+    const px = Math.round(size * dpr);
+    if (canvas.width !== px || canvas.height !== px) {
+      canvas.width = px;
+      canvas.height = px;
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
