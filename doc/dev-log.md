@@ -598,7 +598,47 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 16：new-design 合併進 main；一字千金老師監看格修正
+
+**日期**：2026-10-03
+**觸發**：用戶把 `main`（含 PR #8 一字千金）部署上線後回報三件事——（1）老師監看畫面的學生筆跡小九宮格被垂直拉長、下半截跑出可視範圍；（2）改錯字神器退回舊的 114 下學期生字集，115 上學期選項不見；（3）「新增小朋友」按「建立」沒反應、開始練習按鈕也沒反應
+
+### 完成項目
+
+1. **MiniGrid 在 dpr=2 螢幕被垂直拉長兩倍**（`frontend/src/yzqj/components/MiniGrid.tsx`）
+   - 根因：`<canvas>` 預設尺寸 300×150，MiniGrid 只在 `canvas.width !== size*dpr` 時才重設寬高。size=150、dpr=2 時寬度剛好等於預設的 300，設定被跳過，height 留在 150。畫格子與筆跡用的是 150 CSS px × dpr 2 = 300 px 的座標，塞進 150 px 高的 backing store，等於只顯示上半截再拉長兩倍。截圖裡只看得到一條橫向虛線（1/3 那條被拉到 2/3 的位置）、沒有下邊框，與推論一致
+   - 修法：寬高都檢查，任一不符就重設
+
+2. **改錯字神器退回舊版、按鈕失效 → 把 `new-design` 合併進 `main`**
+   - 根因一：PR #8（一字千金）是從 `e719b71` 分出去，`new-design` 的 22 個 commit（Phase 7–15：學院風、115 上生字表、學期 radio、偏好記憶、印章收集簿、同音錯字）從未合進 `main`。部署 `main` 就是部署舊的改錯字神器
+   - 根因二：舊 `main` 的 IndexedDB `DB_VERSION` 是 1，`new-design` 升到 2（多了 stamps、parentSettings 兩個 store）。瀏覽器已被 `rightwrite-00049` 升到版本 2，舊程式用版本 1 開同一個資料庫會丟 `VersionError`，profiles 讀不到、`createProfile` 失敗 → 「建立」沒反應；個人化開著卻沒有 active profile → 快速選擇與「開始練習！」一直停用。這就是「原本可以用的程式壞掉」的真正機制
+   - conflict 只有兩個檔案：
+     - `backend/main.py`：PR #8 把 `_recognize_with_vision_api`／`_recognize_with_gemini` 搬到 `recognition.py`，`new-design` 卻在原位置改良了這兩個函式。解法是把 `new-design` 的改良版（Vision 用 `document_text_detection`＋zh-Hant 提示＋取第一個中文字＋OpenCC s2tw；Gemini 加 `thinking_level` 參數＋繁體限定 prompt）搬進 `recognition.py`，`main.py` 只留 import。改錯字神器的兩段式辨識（low → 升級）與一字千金的 `recognize_character` 共用同一份實作
+     - `frontend/index.html`：Google Fonts 同時載 LXGW WenKai TC（兩邊共用）、Zen Maru Gothic（改錯字神器學院風）、ZCOOL KuaiLe（portal 與一字千金）；保留楷體 `ARPLUKaiTW-yzqj.woff2` preload；`<title>` 預設「國語學習樂園」，改錯字神器的分頁標題改在 `main.tsx` 依路徑設定（Portal 與一字千金本來就在元件內自己設）
+   - 其餘 44 個檔案自動合併，`comm` 比對兩邊自 `e719b71` 以來改過的檔案只有上述兩個重疊，沒有語意衝突的候選
+
+### 發現與修正
+
+- **`gcloud builds submit` 印出 ERROR 不等於 build 失敗**：訊息是「This tool can only stream logs if you are Viewer/Owner」，build 已在 Cloud Build 上繼續跑，用 `gcloud builds describe <id>` 查實際狀態即可（本次兩個 build 都是 SUCCESS）
+- **本機 Playwright（Python）要的 Chromium 版本沒下載**：改用 `executable_path` 指到 `/Applications/Google Chrome.app`，跟 `frontend/capture.cjs` 的做法一致；`wait_until="networkidle"` 在這個 app 永遠等不到（有長連線），改 `"load"` 加固定等待
+- **字型檔 content-type 不對**：`/fonts/ARPLUKaiTW-yzqj.woff2` 回 `text/plain`，`GET /{path}` 用 Python `mimetypes` 猜型別而 3.12 的表沒有 `.woff2`。瀏覽器靠 magic bytes 仍會載入，先記 TODO
+
+### 測試結果
+
+- 前端：`vitest` 80/80、`tsc -b`＋`vite build` 通過；後端：`pytest` 32/32（含 `test_yzqj.py` 整場流程）
+- 真實瀏覽器 E2E（Chrome headless、dpr=2、本機 :8001 production build）：
+  - 改錯字神器：⚙️ 開個人化 → ➕ 新增 → 填名字 → 建立 → profile 立刻成為 active、提示 banner 消失 → 快速選擇「期中考範圍」直接進練習（7 句、115 上生字）→ 重新載入後 profile 仍記得 → 自訂範圍「開始練習！」也能進練習；console 零錯誤
+  - 一字千金：建立賽局 → 兩名學生加入 → 老師按開始 → 學生端經 WebSocket 送「才」三筆 → 老師端 mini-grid canvas backing store 300×300（修前 300×150）、九宮格四條虛線與下邊框齊全、筆跡完整落在格內
+  - Portal `/` 標題「國語學習樂園」、連到 `/rightwrite` 與 `/yzqj`
+- Build/部署：成功（Cloud Run `rightwrite-00053-szd`，asia-east1，取代 00051-628）；線上驗證：bundle hash `index-CxQTpEiL.js` 與本機合併後 build 相同；Chrome headless（dpr=2）在線上走完 開個人化 → 新增小朋友 → 建立 → 自訂範圍開始練習，console 零錯誤；首頁學期 radio 顯示「115上學期（預設）／114下學期」；一字千金建局 → 兩人加入 → 開始 → 學生經 wss 送筆跡 → 老師端 mini-grid backing store 300×300、九宮格完整
+
+---
+
+
 ## TODO
+
+- [ ] Phase 16 follow-up — `GET /{path}` 對 `.woff2` 回 `text/plain`：在 `backend/main.py` 用 `mimetypes.add_type("font/woff2", ".woff2")` 註冊即可
+- [ ] Phase 16 follow-up — `new-design` branch 已合併，確認無人再用後刪除本機與遠端 branch；`ccr-c7a638b9-5wbdl0` 已進 `main`，可一併刪
 
 - [ ] Phase 15 follow-up — 輪替紀錄存在 localStorage，換裝置／清瀏覽器會歸零（回到「可能跟上次撞題」）；若要跨裝置，需併入 Phase C 同步
 - [ ] Phase 15 follow-up — `similar_wrong` 資料本身有雜訊（憑→媽、蓓→部 既不同音也不相似）；同音分級目前把它們濾掉了，但根治要回頭清 `scripts/` 產資料那一段
@@ -607,7 +647,7 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - [ ] Phase 14 follow-up — 滿分章（Phase 15 前叫「滿分印」）目前每次滿分都蓋（scope=sessionId），觀察是否被「刷短範圍」灌水；必要時改每日上限
 - [ ] Phase 13 follow-up — 上線後以 Cloud Run log 監控「Gemini(escalated)」出現率（＝升級率），一週後回算實際月成本；若升級率異常高，檢查是否 low 模型行為飄移
 - [ ] Phase 13 follow-up — `_recognize_with_gemini` 兩段呼叫目前串行，寫錯情境延遲 9–16s；若體感太慢可考慮 streaming 提示或前端進度動畫
-- [ ] Open PR for the `new-design` branch (Phases 7–12) — already deployed to production as `rightwrite-00045-kxv`, but not yet merged to default branch
+- [x] ~~Open PR for the `new-design` branch (Phases 7–12)~~ — Phase 16 直接 merge 進 `main`（commit `aa53458`）
 - [ ] Update CLAUDE.md "Frontend Aesthetics" section to match the 學院風 redesign — it still mandates ZCOOL KuaiLe, cute shapes, confetti, and bouncy motion, all reversed in Phase 7 (do this if `new-design` is adopted)
 - [ ] Real-handwriting validation of Phase 8: have a child use the live site; collect screenshots of any mis-recognitions to tune against actual failure cases (synthetic distorted glyphs only prove direction, not magnitude)
 - [x] ~~Investigate `gemini-3-flash-preview` recognition quality for children's handwriting~~ — addressed in Phase 8 (Gemini now primary, 繁體-constrained prompt, tolerant parsing)
