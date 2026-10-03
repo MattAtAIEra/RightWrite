@@ -32,6 +32,7 @@ export interface WrongChar {
   correct_char: string;
   lesson: number;
   lesson_title: string;
+  word: string;
 }
 
 export interface ArticleResponse {
@@ -39,6 +40,7 @@ export interface ArticleResponse {
   display_text: string;
   wrong_chars: WrongChar[];
   total_wrong: number;
+  zhuyin: string[];
 }
 
 export interface RecognizeResponse {
@@ -47,5 +49,5 @@ export interface RecognizeResponse {
   confidence: number;
 }
 
-export type AppStage = "select" | "practice" | "result";
+export type AppStage = "select" | "practice" | "result" | "dashboard";
 export type PracticeMode = "sentence" | "article";

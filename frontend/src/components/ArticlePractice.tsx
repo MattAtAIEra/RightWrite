@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
 import { generateArticle, recognizeHandwriting } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
+import { usePersonalization } from "../personalization/PersonalizationContext";
+import { recordSession } from "../storage/sessionStore";
+import { listByProfile as listCharStats } from "../storage/charStatsStore";
+import { buildWeightedChars } from "../personalization/weights";
+import type { PracticeEvent } from "../storage/types";
+import QuotaModal from "../personalization/QuotaModal";
 
 interface Props {
   startLesson: number;
   endLesson: number;
   practiceMode: PracticeMode;
   gradeId: string;
+  gradeLabel: string;
   onFinish: (results: AnswerResult[]) => void;
   onBack: () => void;
 }
@@ -19,7 +26,10 @@ export interface AnswerResult {
   isCorrect: boolean;
   lesson: number;
   lessonTitle: string;
+  word: string;
+  gradeId: string;
   type: "found_wrong" | "false_alarm" | "missed";
+  imageData?: string;
 }
 
 interface CharAnnotation {
@@ -28,6 +38,7 @@ interface CharAnnotation {
   isCorrect: boolean;
   userChar: string;
   type: "found_wrong" | "false_alarm";
+  pending?: boolean;
 }
 
 const SENTENCE_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
@@ -37,9 +48,12 @@ export default function ArticlePractice({
   endLesson,
   practiceMode,
   gradeId,
+  gradeLabel,
   onFinish,
   onBack,
 }: Props) {
+  const personalization = usePersonalization();
+  const [startedAt] = useState(() => Date.now());
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCharIndex, setSelectedCharIndex] = useState<number | null>(null);
@@ -50,15 +64,156 @@ export default function ArticlePractice({
     char: string;
     wrongChar: WrongChar | null; // null = this is a correct char
   } | null>(null);
+  const [showZhuyin, setShowZhuyin] = useState(false);
   const [results, setResults] = useState<AnswerResult[]>([]);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    generateArticle(startLesson, endLesson, practiceMode, gradeId)
-      .then(setArticle)
-      .catch(() => alert("生成文章失敗，請重試"))
-      .finally(() => setLoading(false));
-  }, [startLesson, endLesson, practiceMode]);
+    (async () => {
+      let weightedChars: Record<string, number> | undefined;
+      if (personalization.enabled && personalization.activeProfile) {
+        const stats = await listCharStats(personalization.activeProfile.id);
+        // Only weight chars from the current grade — different grades have independent vocab
+        const gradeStats = stats.filter((s) => s.gradeId === gradeId);
+        const built = buildWeightedChars(gradeStats);
+        if (Object.keys(built).length > 0) weightedChars = built;
+      }
+      try {
+        const article = await generateArticle(startLesson, endLesson, practiceMode, gradeId, weightedChars);
+        setArticle(article);
+      } catch {
+        alert("生成文章失敗，請重試");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [startLesson, endLesson, practiceMode, gradeId, personalization.enabled, personalization.activeProfile]);
+
+  // Fire-and-forget recognition for a wrong character
+  const recognizeWrongChar = useCallback(
+    (imageData: string, charIndex: number, wrongChar: WrongChar) => {
+      // Set pending annotation immediately
+      const pendingAnnotation: CharAnnotation = {
+        charIndex,
+        imageData,
+        isCorrect: false,
+        userChar: "…",
+        type: "found_wrong",
+        pending: true,
+      };
+      setAnnotations((prev) => new Map(prev).set(charIndex, pendingAnnotation));
+
+      recognizeHandwriting(imageData, wrongChar.correct_char)
+        .then((response) => {
+          const annotation: CharAnnotation = {
+            charIndex,
+            imageData,
+            isCorrect: response.is_correct,
+            userChar: response.recognized_char,
+            type: "found_wrong",
+          };
+          setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+
+          const result: AnswerResult = {
+            wrongChar: wrongChar.wrong_char,
+            correctChar: wrongChar.correct_char,
+            userAnswer: response.recognized_char,
+            isCorrect: response.is_correct,
+            lesson: wrongChar.lesson,
+            lessonTitle: wrongChar.lesson_title,
+            word: wrongChar.word,
+            gradeId,
+            type: "found_wrong",
+            imageData,
+          };
+          setResults((prev) => [
+            ...prev.filter(
+              (r) =>
+                !(
+                  r.type === "found_wrong" &&
+                  r.wrongChar === wrongChar.wrong_char
+                )
+            ),
+            result,
+          ]);
+        })
+        .catch(() => {
+          // Fallback: treat as correct
+          const annotation: CharAnnotation = {
+            charIndex,
+            imageData,
+            isCorrect: true,
+            userChar: wrongChar.correct_char,
+            type: "found_wrong",
+          };
+          setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+        });
+    },
+    [gradeId]
+  );
+
+  // Fire-and-forget recognition for a correct character (false alarm check)
+  const recognizeCorrectChar = useCallback(
+    (imageData: string, charIndex: number, originalChar: string) => {
+      // Set pending annotation
+      const pendingAnnotation: CharAnnotation = {
+        charIndex,
+        imageData,
+        isCorrect: false,
+        userChar: "…",
+        type: "false_alarm",
+        pending: true,
+      };
+      setAnnotations((prev) => new Map(prev).set(charIndex, pendingAnnotation));
+
+      recognizeHandwriting(imageData, originalChar)
+        .then((response) => {
+          if (response.recognized_char === originalChar) {
+            // No penalty — they confirmed the character is correct
+            setAnnotations((prev) => {
+              const next = new Map(prev);
+              next.delete(charIndex);
+              return next;
+            });
+          } else {
+            // False alarm (penalty)
+            const annotation: CharAnnotation = {
+              charIndex,
+              imageData,
+              isCorrect: false,
+              userChar: response.recognized_char,
+              type: "false_alarm",
+            };
+            setAnnotations((prev) => new Map(prev).set(charIndex, annotation));
+
+            const result: AnswerResult = {
+              wrongChar: originalChar,
+              correctChar: originalChar,
+              userAnswer: response.recognized_char,
+              isCorrect: false,
+              lesson: 0,
+              lessonTitle: "",
+              word: "",
+              gradeId,
+              type: "false_alarm",
+              imageData,
+            };
+            setResults((prev) => [...prev, result]);
+          }
+        })
+        .catch(() => {
+          // Recognition failed — remove pending, no penalty
+          setAnnotations((prev) => {
+            const next = new Map(prev);
+            next.delete(charIndex);
+            return next;
+          });
+        });
+    },
+    [gradeId]
+  );
 
   if (loading) {
     return <div className="loader">{practiceMode === "sentence" ? "正在生成練習句子..." : "正在生成練習文章..."}</div>;
@@ -74,8 +229,9 @@ export default function ArticlePractice({
   }
 
   const handleCharClick = (charIndex: number, char: string) => {
-    // Already answered this position — skip
-    if (annotations.has(charIndex)) return;
+    // Skip if recognition is still pending
+    const existing = annotations.get(charIndex);
+    if (existing?.pending) return;
 
     // Skip punctuation and whitespace
     if (/[\s，。、；：！？「」『』（）—…\u3000]/.test(char)) return;
@@ -91,101 +247,31 @@ export default function ArticlePractice({
     setShowCanvas(true);
   };
 
-  const handleCanvasSubmit = async (imageData: string, _drawnChar: string) => {
+  const handleCanvasSubmit = (imageData: string, _drawnChar: string) => {
     if (!currentClickedChar || selectedCharIndex === null) return;
 
     const { wrongChar } = currentClickedChar;
+    const charIndex = selectedCharIndex;
 
-    if (wrongChar) {
-      // User clicked on a WRONG character — check if they wrote the correct one
-      try {
-        const response = await recognizeHandwriting(
-          imageData,
-          wrongChar.correct_char
-        );
-
-        const annotation: CharAnnotation = {
-          charIndex: selectedCharIndex,
-          imageData,
-          isCorrect: response.is_correct,
-          userChar: response.recognized_char,
-          type: "found_wrong",
-        };
-        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-
-        const result: AnswerResult = {
-          wrongChar: wrongChar.wrong_char,
-          correctChar: wrongChar.correct_char,
-          userAnswer: response.recognized_char,
-          isCorrect: response.is_correct,
-          lesson: wrongChar.lesson,
-          lessonTitle: wrongChar.lesson_title,
-          type: "found_wrong",
-        };
-        setResults((prev) => [
-          ...prev.filter((r) => !(r.type === "found_wrong" && r.wrongChar === wrongChar.wrong_char)),
-          result,
-        ]);
-      } catch {
-        // Fallback: treat as correct
-        const annotation: CharAnnotation = {
-          charIndex: selectedCharIndex,
-          imageData,
-          isCorrect: true,
-          userChar: wrongChar.correct_char,
-          type: "found_wrong",
-        };
-        setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-      }
-    } else {
-      // User clicked on a CORRECT character — this is a false alarm
-      // They tried to "fix" something that wasn't broken
-      const originalChar = currentClickedChar.char;
-
-      try {
-        const response = await recognizeHandwriting(imageData, originalChar);
-
-        // If they wrote the same character back, it's not really a false alarm
-        if (response.recognized_char === originalChar) {
-          // No penalty — they just confirmed the character is correct
-        } else {
-          // They wrote something different → false alarm (penalty)
-          const annotation: CharAnnotation = {
-            charIndex: selectedCharIndex,
-            imageData,
-            isCorrect: false,
-            userChar: response.recognized_char,
-            type: "false_alarm",
-          };
-          setAnnotations((prev) => new Map(prev).set(selectedCharIndex, annotation));
-
-          const result: AnswerResult = {
-            wrongChar: originalChar,
-            correctChar: originalChar,
-            userAnswer: response.recognized_char,
-            isCorrect: false,
-            lesson: 0,
-            lessonTitle: "",
-            type: "false_alarm",
-          };
-          setResults((prev) => [...prev, result]);
-        }
-      } catch {
-        // Recognition failed — no penalty
-      }
-    }
-
+    // Dismiss canvas immediately for better UX
     setShowCanvas(false);
     setCurrentClickedChar(null);
     setSelectedCharIndex(null);
+
+    // Fire off recognition in background
+    if (wrongChar) {
+      recognizeWrongChar(imageData, charIndex, wrongChar);
+    } else {
+      recognizeCorrectChar(imageData, charIndex, currentClickedChar.char);
+    }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const allResults = [...results];
     // Mark unfound wrong chars as missed
     for (const wc of article.wrong_chars) {
       const found = allResults.find(
-        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char
+        (r) => r.type === "found_wrong" && r.correctChar === wc.correct_char && r.wrongChar === wc.wrong_char,
       );
       if (!found) {
         allResults.push({
@@ -195,14 +281,78 @@ export default function ArticlePractice({
           isCorrect: false,
           lesson: wc.lesson,
           lessonTitle: wc.lesson_title,
+          word: wc.word,
+          gradeId,
           type: "missed",
         });
       }
     }
+
+    let needsModal = false;
+    if (personalization.enabled && personalization.activeProfile) {
+      const events: PracticeEvent[] = allResults.map((r) => ({
+        type: r.type,
+        wrongChar: r.wrongChar,
+        correctChar: r.correctChar,
+        userAnswer: r.userAnswer,
+        isCorrect: r.isCorrect,
+        lesson: r.lesson,
+        lessonTitle: r.lessonTitle,
+        word: r.word,
+        imageData: r.imageData,
+      }));
+      try {
+        const result = await recordSession({
+          profileId: personalization.activeProfile.id,
+          gradeId,
+          gradeLabel,
+          startLesson,
+          endLesson,
+          mode: practiceMode,
+          startedAt,
+          finishedAt: Date.now(),
+          events,
+        });
+        needsModal = result.quotaState === "block" || result.quotaState === "warn";
+      } catch (err) {
+        console.error("Failed to record session", err);
+      }
+    }
+
+    if (needsModal) {
+      // Store results and show modal; onFinish triggers when modal closes
+      setShowQuotaModal(true);
+      setPendingResults(allResults);
+      return;
+    }
+
     onFinish(allResults);
   };
 
-  const answeredCount = annotations.size;
+  const answeredCount = [...annotations.values()].filter((a) => !a.pending).length;
+
+  // Split zhuyin into body + side-tone, following the rules in
+  // memory/project_zhuyin_rules.md:
+  //   - 二聲 ˊ / 三聲 ˇ / 四聲 ˋ → render the tone as a SIBLING of <ruby>
+  //     (positioned absolutely on the right of the column). Putting position
+  //     absolute INSIDE <rt> gets clipped on iOS — don't do that.
+  //   - 輕聲 ˙ → prepend to the body so native vertical-rl ruby renders it
+  //     at the TOP of the bopomofo column.
+  //   - 一聲 / no mark → render the body as-is.
+  const SIDE_TONES = "ˊˇˋ";
+  const NEUTRAL_TONE = "˙";
+  const splitZhuyin = (zy: string): { body: string; sideTone: string } => {
+    if (!zy) return { body: "", sideTone: "" };
+    const last = zy[zy.length - 1];
+    if (SIDE_TONES.includes(last)) {
+      return { body: zy.slice(0, -1), sideTone: last };
+    }
+    if (last === NEUTRAL_TONE) {
+      // Move 輕聲 to the top of the column
+      return { body: NEUTRAL_TONE + zy.slice(0, -1), sideTone: "" };
+    }
+    return { body: zy, sideTone: "" };
+  };
 
   // Render the article text character by character
   const renderArticle = () => {
@@ -240,7 +390,9 @@ export default function ArticlePractice({
 
       let charClass = "article-char";
       if (annotation) {
-        if (annotation.type === "found_wrong") {
+        if (annotation.pending) {
+          charClass += " pending-recognition";
+        } else if (annotation.type === "found_wrong") {
           charClass += annotation.isCorrect ? " found-correct" : " found-wrong";
         } else if (annotation.type === "false_alarm") {
           charClass += " false-alarm";
@@ -250,21 +402,44 @@ export default function ArticlePractice({
         charClass += " punctuation";
       }
 
+      const zhuyinStr = showZhuyin ? (article.zhuyin?.[index] || "") : "";
+      const isChineseChar = /[\u4e00-\u9fff]/.test(char);
+      const { body: zyBody, sideTone: zySideTone } = splitZhuyin(zhuyinStr);
+
       elements.push(
-        <span key={index} className="char-wrapper">
-          <span
-            className={charClass}
-            onClick={() => !isPunctuation && handleCharClick(index, char)}
-          >
-            {char}
-          </span>
+        <span key={index} className={`char-wrapper${zhuyinStr ? " has-zhuyin" : ""}`}>
+          {showZhuyin && isChineseChar && zhuyinStr ? (
+            <>
+              <ruby
+                className={charClass}
+                onClick={() => !isPunctuation && handleCharClick(index, char)}
+              >
+                {char}
+                <rt className="zy-rt">{zyBody}</rt>
+              </ruby>
+              {zySideTone && <span className="zy-side-tone">{zySideTone}</span>}
+            </>
+          ) : (
+            <span
+              className={charClass}
+              onClick={() => !isPunctuation && handleCharClick(index, char)}
+            >
+              {char}
+            </span>
+          )}
           {annotation && (
             <span
               className={`annotation ${
-                annotation.isCorrect ? "correct" : "incorrect"
+                annotation.pending
+                  ? "pending"
+                  : annotation.isCorrect
+                  ? "correct"
+                  : "incorrect"
               }`}
             >
-              {annotation.type === "found_wrong"
+              {annotation.pending
+                ? "⏳"
+                : annotation.type === "found_wrong"
                 ? annotation.isCorrect
                   ? annotation.userChar
                   : `→${annotation.userChar}`
@@ -287,6 +462,12 @@ export default function ArticlePractice({
         <div className="progress-info">
           <span>已作答 {answeredCount} 個字</span>
         </div>
+        <button
+          className="zhuyin-toggle-btn"
+          onClick={() => setShowZhuyin((v) => !v)}
+        >
+          {showZhuyin ? "隱藏注音" : "顯示注音"}
+        </button>
       </div>
 
       <div className="instruction-bar">
@@ -295,7 +476,9 @@ export default function ArticlePractice({
           : "💡 點擊文章中你認為是錯字的字，手寫出正確的字！"}
       </div>
 
-      <div className="article-display">{renderArticle()}</div>
+      <div className={`article-display ${showZhuyin ? "with-zhuyin" : ""}`}>
+        {renderArticle()}
+      </div>
 
       <div className="practice-footer">
         <button className="finish-btn" onClick={handleFinish}>
@@ -310,6 +493,20 @@ export default function ArticlePractice({
             setShowCanvas(false);
             setCurrentClickedChar(null);
             setSelectedCharIndex(null);
+          }}
+        />
+      )}
+
+      {showQuotaModal && (
+        <QuotaModal
+          open={showQuotaModal}
+          onClose={() => {
+            setShowQuotaModal(false);
+            if (pendingResults) {
+              const r = pendingResults;
+              setPendingResults(null);
+              onFinish(r);
+            }
           }}
         />
       )}

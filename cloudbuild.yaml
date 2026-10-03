@@ -28,5 +28,7 @@ steps:
       - "3600"
       - "--port"
       - "8080"
+      - "--set-secrets"
+      - "GEMINI_API_KEY=gemini-api-key:latest"
 images:
   - "gcr.io/$PROJECT_ID/rightwrite"

@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import type { LessonsResponse, PracticeMode, GradeOption } from "../types";
 import { fetchLessons, fetchGrades } from "../api";
+import { usePersonalization } from "../personalization/PersonalizationContext";
+import ProfilePicker from "../personalization/ProfilePicker";
+import { purgeOlderThanFourMonths } from "../storage/imageStore";
+import { isSkippingImages, setSkippingImages } from "../storage/skipImagesFlag";
 
 interface Props {
-  onStart: (start: number, end: number, mode: PracticeMode, gradeId: string) => void;
+  onStart: (start: number, end: number, mode: PracticeMode, grade: string, gradeLabel: string) => void;
+  onOpenDashboard: () => void;
 }
 
 function HappyKidsIllustration() {
@@ -62,15 +67,28 @@ function HappyKidsIllustration() {
   );
 }
 
-export default function LessonSelector({ onStart }: Props) {
+const PUBLISHERS = ["康軒版", "南一版", "翰林版"];
+const GRADE_LABELS = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
+
+export default function LessonSelector({ onStart, onOpenDashboard }: Props) {
+  const personalization = usePersonalization();
+  const [showSettings, setShowSettings] = useState(false);
+  const [skipImages, setSkipImagesState] = useState<boolean>(() => isSkippingImages());
   const [grades, setGrades] = useState<GradeOption[]>([]);
-  const [selectedGrade, setSelectedGrade] = useState("grade4");
+  const [selectedPublisher, setSelectedPublisher] = useState("康軒版");
+  const [selectedGradeNum, setSelectedGradeNum] = useState(4);
   const [data, setData] = useState<LessonsResponse | null>(null);
   const [mode, setMode] = useState<"quick" | "custom">("quick");
   const [startLesson, setStartLesson] = useState(1);
   const [endLesson, setEndLesson] = useState(6);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("sentence");
   const [loading, setLoading] = useState(true);
+
+  // Derive grade_id from publisher + grade selection
+  const selectedGrade =
+    grades.find(
+      (g) => g.publisher === selectedPublisher && g.grade === GRADE_LABELS[selectedGradeNum - 1]
+    )?.id || "";
 
   // Fetch available grades on mount
   useEffect(() => {
@@ -79,27 +97,30 @@ export default function LessonSelector({ onStart }: Props) {
       .catch(() => {});
   }, []);
 
-  // Fetch lessons when grade changes
+  // Fetch lessons when derived grade_id changes (background, no full-page reload)
+  const [lessonsLoading, setLessonsLoading] = useState(false);
   useEffect(() => {
-    setLoading(true);
+    if (!selectedGrade) return;
+    setLessonsLoading(true);
     fetchLessons(selectedGrade)
       .then((res) => {
+        // Sort lessons by lesson_number
+        res.lessons.sort((a, b) => a.lesson_number - b.lesson_number);
         setData(res);
         setStartLesson(1);
         setEndLesson(res.midterm_range[1]);
+        setLoading(false);
       })
-      .finally(() => setLoading(false));
+      .finally(() => setLessonsLoading(false));
   }, [selectedGrade]);
 
-  if (loading) {
+  if (loading && !data) {
     return <div className="loader">載入中...</div>;
   }
 
-  if (!data) {
-    return <div className="error">無法載入課程資料</div>;
-  }
+  const sortedLessons = data?.lessons ?? [];
 
-  const quickOptions = [
+  const quickOptions = !data ? [] : [
     {
       label: `📖 期中考範圍 (第${data.midterm_range[0]}-${data.midterm_range[1]}課)`,
       start: data.midterm_range[0],
@@ -117,33 +138,120 @@ export default function LessonSelector({ onStart }: Props) {
     },
   ];
 
+  const startDisabled = personalization.enabled && !personalization.activeProfile;
+
   return (
     <div className="selector-container">
+      {/* NEW: settings bar */}
+      <div className="settings-bar">
+        <h1 className="app-title">RightWrite 改錯字練習</h1>
+        <div className="settings-bar-right">
+          {personalization.enabled && personalization.activeProfile && (
+            <button className="dashboard-btn" onClick={onOpenDashboard}>
+              📊 報表
+            </button>
+          )}
+          <button className="settings-btn" onClick={() => setShowSettings((v) => !v)} aria-label="設定">
+            ⚙️
+          </button>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="settings-dropdown">
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={personalization.enabled}
+              onChange={(e) => personalization.setEnabled(e.target.checked)}
+            />
+            <span>個人化記錄</span>
+          </label>
+          <p className="settings-hint">
+            開啟後可以追蹤每位小朋友的學習狀況、看到報表、自動複習錯字。
+          </p>
+          {personalization.enabled && (
+            <>
+              <button
+                className="settings-action"
+                onClick={async () => {
+                  const deleted = await purgeOlderThanFourMonths();
+                  alert(`已刪除 ${deleted} 張 4 個月前的手寫圖`);
+                }}
+              >
+                🗑️ 清理 4 個月前資料
+              </button>
+              <button
+                className="settings-action"
+                onClick={() => {
+                  const next = !skipImages;
+                  setSkippingImages(next);
+                  setSkipImagesState(next);
+                  alert(next ? "停止儲存新的手寫圖（既有資料保留）" : "重新開始儲存手寫圖");
+                }}
+              >
+                {skipImages ? "✅ 開始儲存手寫圖" : "🚫 不再儲存手寫圖"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {personalization.enabled && (
+        <ProfilePicker />
+      )}
+
+      {personalization.enabled && !personalization.activeProfile && (
+        <div className="profile-required-banner">
+          👆 請先選擇或新增一位小朋友再開始練習
+        </div>
+      )}
+
       <div className="selector-header">
         <HappyKidsIllustration />
-        <h1>改錯字練習神器</h1>
         <p className="subtitle">
-          {data.publisher} {data.grade} {data.semester}
+          {data ? `${data.publisher} ${data.grade} ${data.semester}` : ""}
         </p>
       </div>
 
-      {/* Grade selector */}
+      {/* Publisher selector */}
       {grades.length > 1 && (
         <div className="grade-selector">
-          <h3>選擇年級</h3>
+          <h3>出版社</h3>
           <div className="grade-options">
-            {grades.map((g) => (
+            {PUBLISHERS.map((pub) => (
               <button
-                key={g.id}
-                className={`grade-btn ${selectedGrade === g.id ? "active" : ""}`}
-                onClick={() => setSelectedGrade(g.id)}
+                key={pub}
+                className={`grade-btn ${selectedPublisher === pub ? "active" : ""}`}
+                onClick={() => setSelectedPublisher(pub)}
               >
-                {g.label}
+                {pub.replace("版", "")}
               </button>
             ))}
           </div>
         </div>
       )}
+
+      {/* Grade selector */}
+      {grades.length > 1 && (
+        <div className="grade-selector">
+          <h3>年級</h3>
+          <div className="grade-options">
+            {GRADE_LABELS.map((label, i) => (
+              <button
+                key={label}
+                className={`grade-btn ${selectedGradeNum === i + 1 ? "active" : ""}`}
+                onClick={() => setSelectedGradeNum(i + 1)}
+              >
+                {label.replace("年級", "")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Content below: dims while loading new lessons */}
+      <div className={`selector-content ${lessonsLoading ? "loading-dim" : ""}`}>
 
       {/* Practice mode selector */}
       <div className="practice-mode-selector">
@@ -189,12 +297,16 @@ export default function LessonSelector({ onStart }: Props) {
             <button
               key={opt.label}
               className="quick-btn"
-              onClick={() => onStart(opt.start, opt.end, practiceMode, selectedGrade)}
+              disabled={startDisabled}
+              onClick={() => {
+                const selectedGradeLabel = grades.find((g) => g.id === selectedGrade)?.label ?? selectedGrade;
+                onStart(opt.start, opt.end, practiceMode, selectedGrade, selectedGradeLabel);
+              }}
             >
               <span className="quick-label">{opt.label}</span>
               <span className="quick-chars">
                 共{" "}
-                {data.lessons
+                {sortedLessons
                   .filter((l) => l.lesson_number >= opt.start && l.lesson_number <= opt.end)
                   .reduce((sum, l) => sum + l.character_count, 0)}{" "}
                 個生字
@@ -215,7 +327,7 @@ export default function LessonSelector({ onStart }: Props) {
                   if (v > endLesson) setEndLesson(v);
                 }}
               >
-                {data.lessons.map((l) => (
+                {sortedLessons.map((l) => (
                   <option key={l.lesson_number} value={l.lesson_number}>
                     {l.lesson_number} - {l.title}
                   </option>
@@ -229,7 +341,7 @@ export default function LessonSelector({ onStart }: Props) {
                 value={endLesson}
                 onChange={(e) => setEndLesson(Number(e.target.value))}
               >
-                {data.lessons
+                {sortedLessons
                   .filter((l) => l.lesson_number >= startLesson)
                   .map((l) => (
                     <option key={l.lesson_number} value={l.lesson_number}>
@@ -242,7 +354,7 @@ export default function LessonSelector({ onStart }: Props) {
           </div>
 
           <div className="lesson-preview">
-            {data.lessons
+            {sortedLessons
               .filter(
                 (l) =>
                   l.lesson_number >= startLesson && l.lesson_number <= endLesson
@@ -264,12 +376,18 @@ export default function LessonSelector({ onStart }: Props) {
 
           <button
             className="start-btn"
-            onClick={() => onStart(startLesson, endLesson, practiceMode, selectedGrade)}
+            onClick={() => {
+              const selectedGradeLabel = grades.find((g) => g.id === selectedGrade)?.label ?? selectedGrade;
+              onStart(startLesson, endLesson, practiceMode, selectedGrade, selectedGradeLabel);
+            }}
+            disabled={startDisabled}
           >
             開始練習！
           </button>
         </div>
       )}
+
+      </div>{/* end selector-content */}
     </div>
   );
 }

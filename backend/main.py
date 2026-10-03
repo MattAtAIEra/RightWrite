@@ -3,11 +3,17 @@ RightWrite - 國小改錯字練習神器
 Backend API server
 """
 import json
+import logging
+import math
 import os
 import random
 import re
 from pathlib import Path
+from typing import Sequence, TypeVar
 
+logger = logging.getLogger(__name__)
+
+from pypinyin import pinyin, Style
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -15,14 +21,42 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from vocab_data import (
-    GRADE_REGISTRY,
+    get_grade_registry,
     get_grade_info,
     get_vocab_data,
     get_all_characters_in_range,
     get_all_compounds_in_range,
 )
-from recognition import recognize_with_vision_api as _recognize_with_vision_api
+from recognition import (
+    recognize_with_gemini as _recognize_with_gemini,
+    recognize_with_vision_api as _recognize_with_vision_api,
+)
 import yzqj
+
+
+T = TypeVar("T")
+
+
+def _weighted_sample_without_replacement(
+    population: Sequence[T], weights: Sequence[float], k: int
+) -> list[T]:
+    """Sample k items from population without replacement, weighted.
+
+    Uses Efraimidis-Spirakis algorithm: each item gets key = random()**(1/weight),
+    take top-k by key. Items with weight <= 0 are excluded.
+    """
+    if len(population) != len(weights):
+        raise ValueError("population and weights must have the same length")
+    if k <= 0 or not population:
+        return []
+    pairs = [
+        (random.random() ** (1.0 / w) if w > 0 else -math.inf, item)
+        for item, w in zip(population, weights)
+    ]
+    pairs.sort(key=lambda p: p[0], reverse=True)
+    # Drop -inf entries (weight 0) so they're never selected
+    filtered = [item for key, item in pairs if key != -math.inf]
+    return filtered[:k]
 
 
 app = FastAPI(title="RightWrite API", version="1.0.0")
@@ -48,6 +82,7 @@ class GenerateArticleRequest(BaseModel):
     end_lesson: int
     mode: str = "article"  # "sentence" or "article"
     grade_id: str = "grade4"
+    weighted_chars: dict[str, float] | None = None  # NEW
 
 
 class GenerateArticleResponse(BaseModel):
@@ -55,6 +90,7 @@ class GenerateArticleResponse(BaseModel):
     display_text: str
     wrong_chars: list[dict]  # [{position, wrong_char, correct_char, lesson}]
     total_wrong: int
+    zhuyin: list[str]  # per-character zhuyin, same length as display_text
 
 
 class RecognizeRequest(BaseModel):
@@ -78,6 +114,25 @@ class CheckAnswerRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _generate_zhuyin(text: str) -> list[str]:
+    """Generate per-character zhuyin for the display text.
+
+    Process line-by-line so that newlines don't cause pypinyin to merge
+    tokens across line boundaries (e.g. ``。\\n`` → single reading).
+    """
+    result: list[str] = []
+    for i, line in enumerate(text.split("\n")):
+        if i > 0:
+            result.append("")  # placeholder for the \n character
+        readings = pinyin(line, style=Style.BOPOMOFO, heteronym=False)
+        for char, reading_list in zip(line, readings):
+            if '\u4e00' <= char <= '\u9fff':
+                result.append(reading_list[0])
+            else:
+                result.append("")
+    return result
+
+
 def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grade4") -> dict[str, list[str]]:
     """Build a char -> similar_wrong lookup from the lesson range."""
     data = get_vocab_data(grade_id)
@@ -90,50 +145,111 @@ def _build_char_lookup(start_lesson: int, end_lesson: int, grade_id: str = "grad
     return lookup
 
 
-def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str = "article", grade_id: str = "grade4") -> dict:
+def _generate_sentences_with_gemini(words: list[str]) -> list[str]:
+    """Use Gemini to generate natural sentences, each containing one of the given words."""
+    from google import genai
+    from google.genai import types
+
+    words_list = "、".join(words)
+    prompt = (
+        f"請為以下每個詞語各造一個適合國小四年級學生閱讀的句子。\n"
+        f"詞語：{words_list}\n\n"
+        f"規則：\n"
+        f"- 每個詞語造一個句子，句子長度 15～30 字\n"
+        f"- 句子必須完整包含該詞語（不可拆開或變形）\n"
+        f"- 用字遣詞要符合國小四年級程度\n"
+        f"- 每行一個句子，句子結尾要有句號\n"
+        f"- 只輸出句子，不要編號、不要詞語標示、不要任何多餘文字\n"
+        f"- 共 {len(words)} 個句子，順序與詞語順序一致"
+    )
+
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-3.1-flash-lite-preview",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=256),
+            temperature=0.9,
+        ),
+    )
+
+    lines = [line.strip() for line in response.text.strip().split("\n") if line.strip()]
+    if len(lines) < len(words):
+        raise ValueError(f"Gemini returned {len(lines)} sentences for {len(words)} words")
+    return lines[:len(words)]
+
+
+def generate_article_with_errors(
+    start_lesson: int,
+    end_lesson: int,
+    mode: str = "article",
+    grade_id: str = "grade4",
+    weighted_chars: dict[str, float] | None = None,
+) -> dict:
     """
     Generate content with wrong characters from the selected lessons.
     Uses compound words (詞語) as the unit — each wrong character always
-    appears within a word in a real example sentence, so there is enough
+    appears within a word in a Gemini-generated sentence, so there is enough
     context for students to identify the error.
     """
     compounds_pool = get_all_compounds_in_range(start_lesson, end_lesson, grade_id)
     char_lookup = _build_char_lookup(start_lesson, end_lesson, grade_id)
 
-    # Filter to compounds that have usable example sentences
+    # Filter to compounds that have swappable characters
     usable = []
     for comp in compounds_pool:
         word = comp["word"]
-        examples = [ex for ex in comp.get("examples", []) if len(ex) >= 5 and word in ex]
-        if not examples:
-            continue
-        # Find which characters in this word have similar_wrong mappings
         swappable = [(i, ch) for i, ch in enumerate(word) if ch in char_lookup]
         if not swappable:
             continue
-        usable.append({**comp, "_examples": examples, "_swappable": swappable})
+        usable.append({**comp, "_swappable": swappable})
 
     if not usable:
-        raise HTTPException(status_code=400, detail="No usable compound examples found for the selected range")
+        raise HTTPException(status_code=400, detail="No usable compounds found for the selected range")
 
     if mode == "sentence":
         num_wrong = min(random.randint(5, 7), len(usable))
     else:
         num_wrong = min(random.randint(5, 8), len(usable))
 
-    selected = random.sample(usable, num_wrong)
+    if weighted_chars:
+        item_weights = [
+            max(
+                (weighted_chars.get(ch, 1.0) for _, ch in comp["_swappable"]),
+                default=1.0,
+            )
+            for comp in usable
+        ]
+        selected = _weighted_sample_without_replacement(usable, item_weights, num_wrong)
+    else:
+        selected = random.sample(usable, num_wrong)
+    words = [comp["word"] for comp in selected]
+
+    # Generate sentences with Gemini
+    try:
+        sentences = _generate_sentences_with_gemini(words)
+    except Exception as e:
+        logger.error("Gemini sentence generation failed: %s", e)
+        # Fallback: use pre-existing example sentences
+        sentences = []
+        for comp in selected:
+            examples = [ex for ex in comp.get("examples", []) if comp["word"] in ex]
+            sentences.append(random.choice(examples) if examples else f"他學會了{comp['word']}這個詞語。")
 
     wrong_chars_info = []
     original_lines = []
     display_lines = []
 
-    for comp_info in selected:
+    for i, comp_info in enumerate(selected):
         word = comp_info["word"]
         lesson_num = comp_info["lesson"]
         lesson_title = comp_info["lesson_title"]
+        original_sentence = sentences[i]
 
-        # Pick a random example sentence
-        original_sentence = random.choice(comp_info["_examples"])
+        # Verify the word appears in the sentence; fallback if not
+        if word not in original_sentence:
+            examples = [ex for ex in comp_info.get("examples", []) if word in ex]
+            original_sentence = random.choice(examples) if examples else f"他學會了{word}這個詞語。"
 
         # Pick a random swappable character from the word
         _idx, correct_char = random.choice(comp_info["_swappable"])
@@ -173,6 +289,7 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
         "display_text": display_text,
         "wrong_chars": wrong_chars_info,
         "total_wrong": len(wrong_chars_info),
+        "zhuyin": _generate_zhuyin(display_text),
     }
 
 
@@ -184,7 +301,7 @@ def generate_article_with_errors(start_lesson: int, end_lesson: int, mode: str =
 def get_grades():
     """Get all available grades."""
     grades = []
-    for grade_id, info in GRADE_REGISTRY.items():
+    for grade_id, info in get_grade_registry().items():
         grades.append({
             "id": grade_id,
             "label": info["label"],
@@ -228,7 +345,9 @@ def generate_article(req: GenerateArticleRequest):
     if req.start_lesson > req.end_lesson:
         raise HTTPException(status_code=400, detail="Start lesson must be <= end lesson")
 
-    result = generate_article_with_errors(req.start_lesson, req.end_lesson, req.mode, req.grade_id)
+    result = generate_article_with_errors(
+        req.start_lesson, req.end_lesson, req.mode, req.grade_id, req.weighted_chars,
+    )
     return result
 
 
@@ -236,27 +355,42 @@ def generate_article(req: GenerateArticleRequest):
 def recognize_handwriting(req: RecognizeRequest):
     """
     Recognize handwritten character from canvas image.
-    Uses Google Cloud Vision API if available, otherwise falls back to simple matching.
+    Tries Google Cloud Vision first, then Claude Vision as fallback.
     """
     expected = req.expected_char
 
     # Try Google Cloud Vision API first
     try:
         recognized, confidence = _recognize_with_vision_api(req.image_data)
+        logger.info("Vision API recognized: %s (expected: %s)", recognized, expected)
         is_correct = recognized == expected
         return RecognizeResponse(
             recognized_char=recognized,
             is_correct=is_correct,
             confidence=confidence,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Vision API failed: %s", e, exc_info=True)
 
-    # Fallback: trust the client-side recognition or simple comparison
+    # Fallback: use Gemini Vision for handwriting recognition
+    try:
+        recognized, confidence = _recognize_with_gemini(req.image_data)
+        logger.info("Gemini recognized: %s (expected: %s)", recognized, expected)
+        is_correct = recognized == expected
+        return RecognizeResponse(
+            recognized_char=recognized,
+            is_correct=is_correct,
+            confidence=confidence,
+        )
+    except Exception as e:
+        logger.error("Gemini recognition failed: %s", e, exc_info=True)
+
+    # Last resort: cannot recognize
+    logger.error("All recognition methods failed for expected=%s", expected)
     return RecognizeResponse(
-        recognized_char=expected,
-        is_correct=True,
-        confidence=0.5,
+        recognized_char="？",
+        is_correct=False,
+        confidence=0.0,
     )
 
 
