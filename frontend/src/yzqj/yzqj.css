@@ -73,9 +73,15 @@ body[data-app="yzqj"] #root {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  /* iOS Safari 會把第一下點擊拿去觸發 :hover，第二下才是 click；
+     hover 效果只給真的有滑鼠的裝置，觸控裝置點一下就是點一下 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.yz-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12); }
+@media (hover: hover) and (pointer: fine) {
+  .yz-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12); }
+}
 .yz-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }
 .yz-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
@@ -566,9 +572,11 @@ body[data-app="yzqj"] #root {
 }
 
 .yz-role-card.student { animation-delay: 0.12s; }
-.yz-role-card:hover { transform: translateY(-4px); }
-.yz-role-card.teacher:hover { border-color: var(--primary-light); }
-.yz-role-card.student:hover { border-color: var(--secondary); }
+@media (hover: hover) and (pointer: fine) {
+  .yz-role-card:hover { transform: translateY(-4px); }
+  .yz-role-card.teacher:hover { border-color: var(--primary-light); }
+  .yz-role-card.student:hover { border-color: var(--secondary); }
+}
 
 .yz-role-icon { font-size: 3.4rem; line-height: 1; margin-bottom: 8px; }
 
@@ -1033,7 +1041,9 @@ body[data-app="yzqj"] #root {
   color: var(--text);
 }
 
-.yz-admin-game-head:hover { background: var(--bg); }
+@media (hover: hover) and (pointer: fine) {
+  .yz-admin-game-head:hover { background: var(--bg); }
+}
 
 .yz-admin-code { font-family: "ZCOOL KuaiLe", monospace; font-size: 1.5rem; letter-spacing: 0.15em; color: var(--primary); }
 
@@ -1086,4 +1096,125 @@ body[data-app="yzqj"] #root {
   .yz-monitor { grid-template-columns: repeat(2, 1fr); }
   .qr-code-value b { font-size: 2.2rem; }
   .yz-btn.big { font-size: 1.15rem; padding: 14px 28px; }
+}
+
+
+/* ----- 成語題庫 ----- */
+
+.yz-idioms {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.yz-admin-links { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.yz-notice {
+  background: var(--success-bg);
+  color: #2b8a3e;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.yz-idiom-form-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+}
+
+.yz-idiom-form-card h2 { margin: 0 0 12px; font-size: 1.25rem; }
+
+.yz-idiom-form { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+.yz-idiom-form > label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.yz-idiom-form input {
+  font-family: inherit;
+  font-size: 1.1rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+}
+.yz-idiom-form input:focus { outline: none; border-color: var(--secondary); }
+
+.yz-idiom-pos { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; font-weight: 700; }
+.yz-idiom-pos-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.yz-idiom-pos-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.yz-idiom-pos-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+.yz-idiom-pos-option b { font-family: var(--calli-font); font-size: 1.8rem; line-height: 1.1; }
+.yz-idiom-pos-option small { color: var(--text-light); font-weight: 400; }
+.yz-idiom-pos-option.active { border-color: var(--primary); background: #fff3f0; }
+
+.yz-idiom-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--paper);
+  border: 1px dashed var(--border);
+}
+.yz-idiom-preview > span { font-family: var(--calli-font); font-size: 1.6rem; line-height: 1.1; }
+.yz-idiom-preview > span.wrong { color: #c92a2a; text-decoration: underline wavy #c92a2a; }
+.yz-idiom-preview-answer { font-family: inherit !important; font-size: 1rem !important; color: var(--text-light); margin-left: 8px; }
+
+.yz-idiom-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.yz-idiom-form .yz-error, .yz-idiom-form .yz-notice { grid-column: 1 / -1; }
+
+.yz-idiom-list {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+.yz-idiom-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.yz-idiom-search {
+  flex: 1;
+  min-width: 200px;
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+}
+.yz-idiom-search:focus { outline: none; border-color: var(--secondary); }
+
+.yz-idiom-table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+.yz-idiom-table th, .yz-idiom-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.yz-idiom-table th { color: var(--text-light); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.yz-idiom-table td.num { color: var(--text-light); width: 2.5em; }
+.yz-idiom-table td.idiom { font-family: var(--calli-font); font-size: 1.5rem; white-space: nowrap; line-height: 1.2; }
+.yz-idiom-table td.meaning { color: var(--text-light); min-width: 220px; }
+.yz-idiom-table tr.is-custom td { background: #fffbea; }
+.yz-idiom-variant { display: inline-flex; align-items: baseline; gap: 2px; margin-right: 12px; white-space: nowrap; }
+.yz-idiom-variant > span { font-family: var(--calli-font); font-size: 1.35rem; line-height: 1.2; }
+.yz-idiom-variant > span.wrong { color: #c92a2a; text-decoration: underline wavy #c92a2a; }
+.yz-idiom-variant small { color: var(--text-light); margin-left: 4px; }
+.yz-idiom-badge { font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--text-light); white-space: nowrap; }
+.yz-idiom-badge.custom { background: #ffe66d; color: #5c4a00; }
+.yz-link-btn { background: none; border: none; color: #c92a2a; font-family: inherit; font-size: 0.95rem; cursor: pointer; padding: 4px 6px; touch-action: manipulation; }
+
+@media (max-width: 700px) {
+  .yz-idiom-form { grid-template-columns: 1fr; }
+  .yz-idiom-table th:nth-child(4), .yz-idiom-table td.meaning { display: none; }
 }

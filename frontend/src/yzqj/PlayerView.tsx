@@ -119,9 +119,11 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [deadlineAt, setDeadlineAt] = useState(0);
   const [hasInk, setHasInk] = useState(false);
-  const [localSubmitted, setLocalSubmitted] = useState<number | null>(null); // 已送出的題號
+  const [localSubmitted, setLocalSubmitted] = useState<number | null>(null); // 已按下送出的題號
   const canvasRef = useRef<GridCanvasHandle>(null);
   const questionIndexRef = useRef<number>(-1);
+  const submittedIdxRef = useRef<number>(-1); // 這題是否已經送過（ref 守門，不靠 setState 的 updater）
+  const pendingRef = useRef<{ idx: number; payload: object } | null>(null); // 斷線時先留著，重連後補送
 
   const url = useMemo(() => socketUrl(code, { role: "player", player_id: me.player_id }), [code, me.player_id]);
 
@@ -129,14 +131,15 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
 
   const submit = useCallback(() => {
     const idx = questionIndexRef.current;
-    if (idx < 0) return;
-    setLocalSubmitted((prev) => {
-      if (prev === idx) return prev;
-      const image = canvasRef.current?.getImage() ?? "";
-      const ink = canvasRef.current?.hasInk() ?? false;
-      sendRef.current({ type: "submit", image_data: image, has_ink: ink });
-      return idx;
-    });
+    if (idx < 0 || submittedIdxRef.current === idx) return;
+    submittedIdxRef.current = idx;
+    const image = canvasRef.current?.getImage() ?? "";
+    const ink = canvasRef.current?.hasInk() ?? false;
+    const payload = { type: "submit", image_data: image, has_ink: ink };
+    if (!sendRef.current(payload)) {
+      pendingRef.current = { idx, payload };
+    }
+    setLocalSubmitted(idx);
   }, []);
 
   const onMessage = useCallback(
@@ -149,9 +152,15 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
             setDeadlineAt((prev) => (Math.abs(prev - next) > 500 ? next : prev));
             if (questionIndexRef.current !== msg.question.index) {
               questionIndexRef.current = msg.question.index;
+              submittedIdxRef.current = -1;
+              pendingRef.current = null;
               setLocalSubmitted(null);
               setHasInk(false);
               canvasRef.current?.clear();
+            }
+            // 伺服器已經收到這題的答案：不用再補送
+            if (msg.players.some((p) => p.id === me.player_id && p.submitted)) {
+              pendingRef.current = null;
             }
           }
           if (msg.status === "lobby" || msg.status === "finished") {
@@ -166,13 +175,22 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
           break;
       }
     },
-    [submit]
+    [submit, me.player_id]
   );
 
   const { send, connected, fatal } = useGameSocket(url, onMessage);
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
+
+  // 按送出時剛好斷線：重連成功就把留著的答案補送出去
+  useEffect(() => {
+    if (!connected) return;
+    const pending = pendingRef.current;
+    if (pending && pending.idx === questionIndexRef.current && send(pending.payload)) {
+      pendingRef.current = null;
+    }
+  }, [connected, send]);
 
   const handleStroke = useCallback(
     (sid: number, pts: number[][], end: boolean) => {
@@ -196,7 +214,8 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
   if (!snap) return <div className="yz-loader">連線中…</div>;
 
   const myPublic = snap.players.find((p) => p.id === me.player_id);
-  const submitted = (myPublic?.submitted ?? false) || (snap.question != null && localSubmitted === snap.question.index);
+  const serverHasIt = myPublic?.submitted ?? false;
+  const submitted = serverHasIt || (snap.question != null && localSubmitted === snap.question.index);
   const myResult = snap.question ? snap.results[me.player_id] : undefined;
   const myBoard = snap.leaderboard.find((b) => b.player_id === me.player_id);
 
@@ -245,8 +264,17 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
             />
             {submitted && (
               <div className="yz-grid-lock">
-                <span>已送出 ✓</span>
-                <small>等其他同學寫完…</small>
+                {serverHasIt ? (
+                  <>
+                    <span>已送出 ✓</span>
+                    <small>等其他同學寫完…</small>
+                  </>
+                ) : (
+                  <>
+                    <span>送出中…</span>
+                    <small>{connected ? "正在傳給老師" : "等網路恢復後會自動送出"}</small>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -266,8 +294,14 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
           <div className={`yz-result-banner ${myResult?.is_correct ? "good" : "bad"}`}>
             {myResult?.is_correct ? (
               <>🎉 答對了！</>
+            ) : myResult?.timed_out ? (
+              <>⏱ 辨識超過 {snap.recognize_timeout} 秒，這題算答錯</>
             ) : myResult?.submitted ? (
-              <>😅 答錯了{myResult.recognized ? `，你寫的是「${myResult.recognized}」` : ""}</>
+              myResult.recognized && myResult.recognized !== "？" ? (
+                <>😅 答錯了，你寫的比較像「{myResult.recognized}」</>
+              ) : (
+                <>😅 看不清楚你寫的字，這題算答錯</>
+              )
             ) : (
               <>⏰ 這題沒有送出</>
             )}

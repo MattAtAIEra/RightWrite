@@ -24,6 +24,10 @@ export interface QuestionView {
 }
 
 export interface ResultEntry {
+  /** 辨識引擎補充（後台 tooltip） */
+  detail?: string;
+  /** 辨識超過時間，這題算錯 */
+  timed_out?: boolean;
   is_correct: boolean;
   recognized: string;
   answer_ms: number;
@@ -57,6 +61,7 @@ export interface Snapshot {
   max_players: number;
   question_seconds: number;
   reveal_seconds: number;
+  recognize_timeout: number;
   total_questions: number;
   players: PlayerPublic[];
   question: QuestionView | null;
@@ -151,4 +156,33 @@ export interface AdminGamesResponse {
   games: AdminGame[];
   stats: { games: number; finished_games: number; players: number };
   live_games: number;
+}
+
+// ----- 成語題庫 -----
+
+export interface IdiomWrong {
+  pos: number;
+  char: string;
+}
+
+export interface IdiomEntry {
+  idiom: string;
+  wrong: IdiomWrong[];
+  meaning: string;
+  source: "builtin" | "custom";
+}
+
+export interface IdiomsResponse {
+  idioms: IdiomEntry[];
+  builtin_count: number;
+  custom_count: number;
+  auth_required: boolean;
+}
+
+export interface YzqjMeta {
+  idiom_count: number;
+  questions_per_round: number;
+  question_seconds: number;
+  recognize_timeout: number;
+  max_players: number;
 }

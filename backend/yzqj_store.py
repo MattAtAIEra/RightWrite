@@ -66,6 +66,14 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (id, round)
         );
         CREATE INDEX IF NOT EXISTS idx_players_game ON players(game_code);
+        CREATE TABLE IF NOT EXISTS question_log (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_code TEXT NOT NULL,
+            round     INTEGER NOT NULL,
+            idiom     TEXT NOT NULL,
+            used_at   REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_question_log_used ON question_log(used_at DESC);
         """
     )
     conn.commit()
@@ -205,3 +213,26 @@ def stats() -> dict:
         finished = conn.execute("SELECT COUNT(*) FROM games WHERE status = 'finished'").fetchone()[0]
         players = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
     return {"games": games, "finished_games": finished, "players": players}
+
+
+# ----- 出題紀錄：讓最近幾輪出過的成語不要再出 -----
+
+
+def log_questions(code: str, round_no: int, idioms: list[str], used_at: float) -> None:
+    with _lock:
+        conn = _connect()
+        conn.executemany(
+            "INSERT INTO question_log (game_code, round, idiom, used_at) VALUES (?, ?, ?, ?)",
+            [(code, round_no, idiom, used_at) for idiom in idioms],
+        )
+        conn.commit()
+
+
+def recent_idioms(limit: int) -> list[str]:
+    """最近出過的成語，最新的在前；limit 是「幾個成語」而不是幾輪。"""
+    with _lock:
+        conn = _connect()
+        rows = conn.execute(
+            "SELECT idiom FROM question_log ORDER BY used_at DESC, id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [r["idiom"] for r in rows]

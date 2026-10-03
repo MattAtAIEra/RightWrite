@@ -1,4 +1,13 @@
-import type { AdminGame, AdminGamesResponse, CreateGameResponse, GameInfo, JoinResponse } from "./types";
+import type {
+  AdminGame,
+  AdminGamesResponse,
+  CreateGameResponse,
+  GameInfo,
+  IdiomEntry,
+  IdiomsResponse,
+  JoinResponse,
+  YzqjMeta,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -63,4 +72,43 @@ export async function fetchAdminGame(token: string, code: string): Promise<Admin
   });
   if (!res.ok) throw new Error(await readError(res, "讀取失敗"));
   return res.json();
+}
+
+// ----- 一般資訊 -----
+
+export async function fetchMeta(): Promise<YzqjMeta> {
+  const res = await fetch(`${API_BASE}/api/yzqj/meta`);
+  if (!res.ok) throw new Error("無法讀取設定");
+  return res.json();
+}
+
+// ----- 成語題庫 -----
+
+export async function fetchIdioms(): Promise<IdiomsResponse> {
+  const res = await fetch(`${API_BASE}/api/yzqj/idioms`);
+  if (!res.ok) throw new Error(await readError(res, "讀取成語題庫失敗"));
+  return res.json();
+}
+
+export async function addIdiom(
+  token: string,
+  body: { idiom: string; wrong: { pos: number; char: string }[]; meaning: string }
+): Promise<IdiomEntry> {
+  const res = await fetch(`${API_BASE}/api/yzqj/idioms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}) },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new Error("後台密碼錯誤");
+  if (!res.ok) throw new Error(await readError(res, "新增失敗"));
+  return res.json();
+}
+
+export async function deleteIdiom(token: string, idiom: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/yzqj/idioms/${encodeURIComponent(idiom)}`, {
+    method: "DELETE",
+    headers: token ? { "X-Admin-Token": token } : {},
+  });
+  if (res.status === 401) throw new Error("後台密碼錯誤");
+  if (!res.ok && res.status !== 204) throw new Error(await readError(res, "刪除失敗"));
 }

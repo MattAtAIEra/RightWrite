@@ -200,8 +200,10 @@ export default function HostView({ code }: Props) {
                     {result ? (
                       result.is_correct ? (
                         <span>✓ 答對 · {formatSeconds(result.answer_ms)}</span>
+                      ) : result.timed_out ? (
+                        <span title={result.detail}>✗ 辨識逾時</span>
                       ) : result.submitted ? (
-                        <span>✗ 答錯{result.recognized ? `（寫成「${result.recognized}」）` : ""}</span>
+                        <span title={result.detail}>✗ 答錯{result.recognized ? `（寫成「${result.recognized}」）` : ""}</span>
                       ) : (
                         <span>✗ 沒有作答</span>
                       )

@@ -130,3 +130,34 @@ def get_all_compounds_in_range(start: int, end: int, grade_id: str = "4_kangxuan
                     "lesson_title": lesson_data["title"],
                 })
     return compounds
+
+
+# ---------------------------------------------------------------------------
+# 形近錯字索引（一字千金的手寫辨識拿來當候選字）
+# ---------------------------------------------------------------------------
+
+_SIMILAR_INDEX: dict[str, list[str]] | None = None
+
+
+def get_similar_wrong(char: str, limit: int = 4) -> list[str]:
+    """整份生字表裡這個字的 similar_wrong 聯集（形近／同音的常見錯字），沒有就是空清單。"""
+    global _SIMILAR_INDEX
+    if _SIMILAR_INDEX is None:
+        _load()
+        index: dict[str, set[str]] = {}
+
+        def walk(obj) -> None:
+            if isinstance(obj, dict):
+                if "char" in obj and isinstance(obj.get("similar_wrong"), list):
+                    index.setdefault(obj["char"], set()).update(
+                        w for w in obj["similar_wrong"] if isinstance(w, str) and len(w) == 1
+                    )
+                for v in obj.values():
+                    walk(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    walk(v)
+
+        walk(_RAW)
+        _SIMILAR_INDEX = {k: sorted(v) for k, v in index.items()}
+    return [c for c in _SIMILAR_INDEX.get(char, []) if c != char][:limit]

@@ -5,6 +5,7 @@ import Landing from "./Landing";
 import HostView from "./HostView";
 import PlayerView from "./PlayerView";
 import AdminView from "./AdminView";
+import IdiomsView from "./IdiomsView";
 
 /**
  * 一字千金的路由：
@@ -12,6 +13,7 @@ import AdminView from "./AdminView";
  *   /yzqj/host/:code   老師監看畫面
  *   /g/:code           學生加入與作答（QR Code 指到這裡，短一點好掃）
  *   /yzqj/admin        成績後台
+ *   /yzqj/idioms       成語題庫（看清單、新增自訂成語）
  */
 export default function YzqjApp() {
   const path = usePathname();
@@ -30,6 +32,8 @@ export default function YzqjApp() {
     page = <PlayerView key={playerMatch[1]} code={playerMatch[1].toUpperCase()} />;
   } else if (/^\/yzqj\/admin\/?$/.test(path)) {
     page = <AdminView />;
+  } else if (/^\/yzqj\/idioms\/?$/.test(path)) {
+    page = <IdiomsView />;
   } else {
     page = <Landing />;
   }

@@ -635,7 +635,74 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 ---
 
 
+## Phase 17：一字千金——出題不重複、送出一次就好、18 秒、辨識逾時、成語題庫頁、潦草字不放水
+
+**日期**：2026-10-03
+**觸發**：用戶實際上課後回報六件事——（1）近幾局的題目會重複；（2）寫完字按「送出」要按兩次；（3）每題改 18 秒；（4）有時等手寫辨識等太久，要有上限，辨識不出來就算錯；（5）要一個成語資料庫清單頁，能看成語表也能新增題庫；（6）字寫太潦草有時會被判對，懷疑是只跟正確字比相似度，要拿可能寫錯的候選字一起比，排除故意潦草矇混的人
+
+### 完成項目
+
+1. **近幾輪不重複出題**（`backend/idioms_data.py pick_questions`、`backend/yzqj.py Game.pick_round_questions`、`backend/yzqj_store.py question_log`）
+   - 原本每輪 `random.sample` 142 個成語抽 5 個，跨輪、跨賽局都可能撞題
+   - 新增 SQLite `question_log`（賽局代碼、輪次、成語、時間）；每輪開始先讀最近 6 輪（30 個成語）當「盡量避開」清單，這一場已出過的成語當「絕對避開」清單；題庫不夠時才回頭用最舊的
+   - 實測三場連開各 5 題共 15 題零重複；同一場「再來一輪」零重複
+
+2. **送出要按兩次**（`frontend/src/yzqj/yzqj.css`、`PlayerView.tsx`、`components/GridCanvas.tsx`）
+   - 用 Chrome 的滑鼠與 CDP 模擬觸控都重現不了：一次點擊就送出。所以是 iPad Safari 特有行為：`.yz-btn:hover` 沒包在 `@media (hover: hover)` 裡，iOS 會把第一下點擊拿去觸發 hover、第二下才是 click（Safari 的已知行為）
+   - 修法：所有 hover 效果只給 `(hover: hover) and (pointer: fine)` 的裝置；按鈕加 `touch-action: manipulation`、關掉 tap highlight
+   - 順手把送出流程改穩：原本把 `send()` 這個 side effect 塞在 `setState` 的 updater 裡，改成 ref 守門＋直接送；送出時剛好斷線會先留著，重連成功自動補送；畫面在伺服器確認前顯示「送出中…」而不是直接顯示「已送出」
+   - `GridCanvas` 補 `onLostPointerCapture` 與 `setPointerCapture` 的 try/catch，避免某些觸控瀏覽器漏掉 pointerup 讓畫板卡在「畫到一半」
+   - 沒有 iPad 可以親手驗，請用戶在 iPad 上確認；若還是要按兩次，下一步是把送出改成 `onPointerUp` 觸發
+
+3. **每題 18 秒**：`YZQJ_QUESTION_SECONDS` 預設 20 → 18；首頁的「每題 N 秒」與題庫數改成讀 `/api/yzqj/meta`，不再寫死
+
+4. **辨識逾時就算錯**（`backend/yzqj.py _grade_current`、`backend/recognition.py`）
+   - 根因：線上只有 `GEMINI_API_KEY`，沒有 Vision 憑證；原本順序是 Vision → Gemini，Gemini 用預設深度思考（實測常 5～10 秒、偶爾更久），而且整段沒有任何 timeout
+   - 新增 `YZQJ_RECOGNIZE_TIMEOUT`（預設 8 秒）：`asyncio.wait_for` 包住每位學生的辨識，超過就記成 `engine=timeout`、`timed_out=true`、答錯；學生端顯示「⏱ 辨識超過 8 秒，這題算答錯」，老師端顯示「✗ 辨識逾時」
+   - Gemini 改用 thinking low（實測 1.5～2.5 秒）並設 HTTP deadline；發現 **Gemini API 的 deadline 最少 10 秒**（給 8 秒回 400），所以 HTTP 層取 max(10s, 設定值)，真正的上限由 asyncio 那層控制
+   - 沒有對應金鑰的引擎直接跳過：本機沒憑證時 Vision 的 ADC 探測要等近 10 秒，會把逾時額度吃光，備援模式反而被判逾時（第一版測試就這樣炸）
+
+5. **成語題庫頁**（`frontend/src/yzqj/IdiomsView.tsx`、`/yzqj/idioms`；`GET/POST/DELETE /api/yzqj/idioms`）
+   - 清單：序號、成語（楷體）、「題目會長這樣」（錯字紅色波浪底線＋正確字）、解釋、來源徽章（內建／自訂）、搜尋
+   - 新增表單：四字成語 → 點選要換掉的是第幾個字（四個格子即時顯示該字）→ 錯字 → 解釋；即時預覽題目長相；有設 `YZQJ_ADMIN_TOKEN` 時要輸入後台密碼
+   - 自訂成語存 JSON（`YZQJ_IDIOMS_PATH`），寫檔用 tmp＋`os.replace` 避免寫到一半；`validate_item` 的檢查訊息直接給畫面（四個字、只能中文、不能重複、錯字不能等於正確字也不能已在成語裡）；內建成語不能刪
+   - **線上持久化**：Cloud Run 檔案系統重啟就清空，所以建了 Cloud Storage bucket `rightwrite-data-teamfollowme`（asia-east1），`cloudbuild.yaml` 改 gen2 執行環境並把 bucket 掛到 `/data`，`YZQJ_IDIOMS_PATH=/data/custom_idioms.json`。SQLite 不適合放 Cloud Storage FUSE，成績庫維持本機磁碟
+   - 自訂成語的字若不在楷體子集字型裡，CSS 會自動退到 LXGW WenKai TC；要用楷體就重跑字型子集腳本
+
+6. **潦草字不放水**（`backend/recognition.py recognize_strict_with_gemini`／`decide_strict`、`idioms_data.distractors_for`、`vocab_data.get_similar_wrong`）
+   - 原本一字千金只做自由辨識再跟正確字比，模型「覺得像」就過
+   - 改成一次 Gemini 呼叫回 JSON 三欄：`char`（不給提示的自由辨識）、`closest`（在候選字裡最接近哪一個）、`clear`（筆畫是否完整可辨）。候選字＝正確字＋題目錯字＋其他成語在同一個字用過的錯字＋生字表 2974 個字的 `similar_wrong` 形近字（最多 5 個，順序打亂避免位置偏好）。三個都指向正確字才算對
+   - 用 Hiragino Sans GB 合成 13 張學生端格式（白底黑字、無格線）的圖做對照：乾淨字、學童程度歪斜加粗、寫成錯字（嗚／步／勵／明）、重度潦草、半個字、亂塗。結果：
+     - v1（嚴格措辭）× thinking low：10/13，乾淨字被誤殺 1、放水 2
+     - v2（clear 定義放寬到「歪斜不工整沒關係，部件缺漏或只能猜才 false」）× low：**12/13，零誤殺，放水 1**，平均 1.9 秒 → 採用
+     - v3（要模型先找候選字差異部件）× low：12/13 但平均 2.5 秒，沒有比 v2 好
+     - thinking default：常超過 10 秒 deadline 直接 504，不可用
+   - 唯一沒擋住的是「嗚」被讀成「鳴」（烏／鳥只差一橫，圖本身人眼清楚），自由辨識與候選比對都認成鳴。這是模型在這一組形近字的固有弱點，先記 TODO
+   - 新增 `POST /api/yzqj/admin/recognize`，可以丟一張圖看判定細節（`recognized`、`closest`、`clear`、耗時），上線後用它驗線上行為
+
+### 發現與修正
+
+- **測試裡 `Game.start()` 會 `asyncio.create_task`**，同步測試沒有 event loop 會炸，把挑題拆成 `pick_round_questions()` 讓測試直接呼叫
+- **`畫龍點睛` 本來就在內建清單**，第一版題庫 API 測試用它當自訂成語被判重複；改成從候選裡挑不在內建清單的
+- **Playwright 的 `.yz-idiom-form input` 會選到隱藏的 radio**，要排除 `[type=radio]`
+- **送出重現腳本的判準過時**：辨識變成瞬間完成後，伺服器一收到就進入公布答案，`.yz-monitor-card.submitted` 立刻變成 `.correct`；改成攔截 WebSocket 的 `submit` 訊息數（必須剛好 1）加老師端卡片任一已確認狀態
+
+### 測試結果
+
+- 後端：`pytest` 40/40（新增 `tests/test_yzqj_phase17.py` 8 項：軟／硬排除、跨賽局與同場不重複、辨識逾時 0.3 秒內算錯且不等慢引擎、`decide_strict` 三條件、候選字內容、題庫 API 的新增／驗證訊息／刪除／JSON 落檔、後台辨識端點）
+- 前端：`vitest` 80/80；`tsc -b`＋`vite build` 通過
+- 真實瀏覽器 E2E（Chrome headless、本機 :8002 production build）：滑鼠與 CDP 觸控各一次點擊 → 剛好 1 個 submit 訊息、老師端卡片立即確認；成語題庫頁 142 筆載入 → 新增「守望相助／住」預覽正確 → 清單 143 筆含自訂徽章 → 搜尋 → 重複新增顯示「已經在題庫裡了」→ 刪除；首頁秒數與題庫數來自 meta
+- Gemini 實測（本機拿 Secret Manager 的金鑰直接呼叫）：見上面第 6 項的對照表
+- Build/部署：成功（Cloud Run `__REVISION__`，asia-east1，取代 00053-szd；gen2＋Cloud Storage volume）；線上驗證：__LIVE__
+
+---
+
+
 ## TODO
+
+- [ ] Phase 17 follow-up — 請在 iPad Safari 上確認「送出」一次就成功；若還是要按兩次，把送出改成 `onPointerUp` 觸發並記錄 pointer 事件序列
+- [ ] Phase 17 follow-up — 「嗚」會被讀成「鳴」（烏／鳥一橫之差）：可針對候選字差異部件做第二次確認呼叫，但要在 8 秒內；先蒐集真實學生的誤判案例再決定
+- [ ] Phase 17 follow-up — 出題紀錄 `question_log` 在 SQLite，Cloud Run 實例重啟會歸零（跨重啟就可能撞到前幾輪的題）；若在意，改存到 `/data` 的 JSON
 
 - [ ] Phase 16 follow-up — `GET /{path}` 對 `.woff2` 回 `text/plain`：在 `backend/main.py` 用 `mimetypes.add_type("font/woff2", ".woff2")` 註冊即可
 - [ ] Phase 16 follow-up — `new-design` branch 已合併，確認無人再用後刪除本機與遠端 branch；`ccr-c7a638b9-5wbdl0` 已進 `main`，可一併刪

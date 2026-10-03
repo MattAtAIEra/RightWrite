@@ -8,10 +8,19 @@
 - meaning: 簡短解釋（結果畫面顯示用）
 
 出題時隨機挑一個成語，再從 wrong 中隨機挑一組，把該位置的字換掉。
+
+除了這裡內建的成語，老師可以在「成語題庫」頁面新增自訂成語，存成 JSON 檔
+（路徑由環境變數 YZQJ_IDIOMS_PATH 指定，預設 backend/data/custom_idioms.json）。
+出題時內建與自訂一起抽。
 """
 from __future__ import annotations
 
+import json
+import os
 import random
+import threading
+from pathlib import Path
+from typing import Iterable
 
 IDIOMS: list[dict] = [
     {"idiom": "一鳴驚人", "wrong": [(1, "嗚")], "meaning": "平時沒有特別表現，一下子做出讓人驚訝的成績。"},
@@ -159,10 +168,116 @@ IDIOMS: list[dict] = [
 ]
 
 
+DEFAULT_CUSTOM_PATH = Path(__file__).parent / "data" / "custom_idioms.json"
+_custom_lock = threading.Lock()
+
+
+def _custom_path() -> Path:
+    return Path(os.environ.get("YZQJ_IDIOMS_PATH", str(DEFAULT_CUSTOM_PATH)))
+
+
+def validate_item(item: dict, existing: Iterable[str] = ()) -> dict:
+    """檢查並整理一筆成語資料；不合規就丟 ValueError（訊息直接給畫面顯示）。"""
+    idiom = str(item.get("idiom", "")).strip()
+    meaning = str(item.get("meaning", "")).strip()
+    raw_wrong = item.get("wrong") or []
+    if len(idiom) != 4:
+        raise ValueError("成語要剛好四個字")
+    if not all("一" <= c <= "鿿" for c in idiom):
+        raise ValueError("成語只能是中文字")
+    if idiom in set(existing):
+        raise ValueError(f"「{idiom}」已經在題庫裡了")
+    if not raw_wrong:
+        raise ValueError("至少要給一組錯字")
+    wrong: list[tuple[int, str]] = []
+    for entry in raw_wrong:
+        if isinstance(entry, dict):
+            pos, char = entry.get("pos"), entry.get("char")
+        else:
+            pos, char = entry[0], entry[1]
+        try:
+            pos = int(pos)
+        except (TypeError, ValueError):
+            raise ValueError("錯字位置要是 0～3 的數字") from None
+        char = str(char or "").strip()
+        if not 0 <= pos < 4:
+            raise ValueError("錯字位置要在第 1～4 字之間")
+        if len(char) != 1 or not ("一" <= char <= "鿿"):
+            raise ValueError("錯字要是單一個中文字")
+        if char == idiom[pos]:
+            raise ValueError(f"第 {pos + 1} 字的錯字「{char}」和正確字相同")
+        if char in idiom:
+            raise ValueError(f"錯字「{char}」已經出現在成語裡")
+        if (pos, char) not in wrong:
+            wrong.append((pos, char))
+    return {"idiom": idiom, "wrong": wrong, "meaning": meaning}
+
+
+def load_custom() -> list[dict]:
+    """讀自訂成語 JSON；檔案不存在或壞掉就當作空的，不讓整個遊戲跟著掛。"""
+    path = _custom_path()
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    items: list[dict] = []
+    builtin = {i["idiom"] for i in IDIOMS}
+    for entry in raw if isinstance(raw, list) else []:
+        try:
+            item = validate_item(entry, existing=builtin | {i["idiom"] for i in items})
+        except (ValueError, TypeError, KeyError):
+            continue
+        item["source"] = "custom"
+        items.append(item)
+    return items
+
+
+def save_custom(items: list[dict]) -> None:
+    path = _custom_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [
+        {"idiom": i["idiom"], "wrong": [list(w) for w in i["wrong"]], "meaning": i["meaning"]}
+        for i in items
+    ]
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def all_idioms() -> list[dict]:
+    """內建＋自訂，每一筆都帶 source 欄位。"""
+    items = [{**i, "source": "builtin"} for i in IDIOMS]
+    items.extend(load_custom())
+    return items
+
+
+def add_custom(entry: dict) -> dict:
+    with _custom_lock:
+        custom = load_custom()
+        existing = [i["idiom"] for i in IDIOMS] + [i["idiom"] for i in custom]
+        item = validate_item(entry, existing=existing)
+        item["source"] = "custom"
+        custom.append(item)
+        save_custom(custom)
+    return item
+
+
+def remove_custom(idiom: str) -> bool:
+    with _custom_lock:
+        custom = load_custom()
+        kept = [i for i in custom if i["idiom"] != idiom]
+        if len(kept) == len(custom):
+            return False
+        save_custom(kept)
+    return True
+
+
 def all_characters() -> set[str]:
     """回傳所有會以書法字型顯示的字（正確字＋錯字），供字型子集化使用。"""
     chars: set[str] = set()
-    for item in IDIOMS:
+    for item in all_idioms():
         chars.update(item["idiom"])
         for _, wrong_char in item["wrong"]:
             chars.add(wrong_char)
@@ -184,24 +299,57 @@ def make_question(item: dict) -> dict:
     }
 
 
-def pick_questions(count: int = 5) -> list[dict]:
-    """隨機挑選 count 個不重複的成語並製成題目。"""
-    chosen = random.sample(IDIOMS, min(count, len(IDIOMS)))
+def pick_questions(
+    count: int = 5,
+    exclude: Iterable[str] = (),
+    must_exclude: Iterable[str] = (),
+) -> list[dict]:
+    """
+    隨機挑 count 個不重複的成語並製成題目。
+
+    exclude:      盡量避開（最近幾輪出過的）；題庫不夠時會回頭用。
+    must_exclude: 一定避開（這一場已經出過的），讓「再來一輪」絕不重複。
+    """
+    pool = all_idioms()
+    hard = set(must_exclude)
+    soft = set(exclude) | hard
+    fresh = [i for i in pool if i["idiom"] not in soft]
+    chosen = random.sample(fresh, min(count, len(fresh)))
+    if len(chosen) < count:
+        taken = {i["idiom"] for i in chosen}
+        rest = [i for i in pool if i["idiom"] not in hard and i["idiom"] not in taken]
+        chosen += random.sample(rest, min(count - len(chosen), len(rest)))
+    random.shuffle(chosen)
     return [make_question(item) for item in chosen]
+
+
+def distractors_for(question: dict, limit: int = 5) -> list[str]:
+    """
+    給辨識用的候選錯字：題目本身的錯字、其他成語在同一個正確字上用過的錯字、
+    生字表裡這個字的形近字。學生寫得像這些字就不算對。
+    """
+    correct = question["correct_char"]
+    found: list[str] = [question["wrong_char"]]
+    for item in all_idioms():
+        for pos, wrong_char in item["wrong"]:
+            if item["idiom"][pos] == correct and wrong_char not in found:
+                found.append(wrong_char)
+    try:
+        from vocab_data import get_similar_wrong
+
+        for c in get_similar_wrong(correct, limit=limit):
+            if c not in found:
+                found.append(c)
+    except Exception:  # pragma: no cover - 生字表讀不到也不影響出題
+        pass
+    return [c for c in found if c != correct][:limit]
 
 
 def _validate() -> None:
     seen = set()
     for item in IDIOMS:
-        idiom = item["idiom"]
-        assert len(idiom) == 4, f"{idiom} 不是四個字"
-        assert idiom not in seen, f"{idiom} 重複"
-        seen.add(idiom)
-        for pos, wrong_char in item["wrong"]:
-            assert 0 <= pos < 4, f"{idiom} 位置錯誤 {pos}"
-            assert len(wrong_char) == 1, f"{idiom} 錯字 {wrong_char} 不是單一字元"
-            assert wrong_char != idiom[pos], f"{idiom} 位置 {pos} 的錯字與正確字相同"
-            assert wrong_char not in idiom, f"{idiom} 的錯字 {wrong_char} 已出現在成語中"
+        validate_item(item, existing=seen)
+        seen.add(item["idiom"])
 
 
 _validate()

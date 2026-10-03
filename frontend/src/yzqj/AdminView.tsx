@@ -60,7 +60,10 @@ export default function AdminView() {
           <h1>一字千金 · 成績後台</h1>
           <p className="yz-hint">每一場賽局的參加者、IP、答題結果與排名。</p>
         </div>
-        <a href="/yzqj" className="yz-btn ghost">回一字千金</a>
+        <div className="yz-admin-links">
+          <a href="/yzqj/idioms" className="yz-btn ghost">成語題庫</a>
+          <a href="/yzqj" className="yz-btn ghost">回一字千金</a>
+        </div>
       </header>
 
       {authRequired && (

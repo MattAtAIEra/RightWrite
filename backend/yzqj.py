@@ -5,9 +5,10 @@
 1. 老師 POST /api/yzqj/games 建立賽局，拿到三碼代碼與 host_token，前端據此產生 QR Code。
 2. 學生掃碼進入 /g/{code}，POST .../join 輸入暱稱加入（最多 10 人），伺服器記錄 IP。
 3. 雙方用 WebSocket /ws/yzqj/{code} 連線。老師按「開始」後，伺服器依序出 5 題，
-   每題倒數 20 秒；學生在九宮格書寫時，筆跡會即時轉送到老師的監看畫面。
+   每題倒數 18 秒；學生在九宮格書寫時，筆跡會即時轉送到老師的監看畫面。
 4. 時間到（或全部送出）後統一辨識、公布答案，接著下一題；五題結束算出正確率與排名，
-   並寫入 SQLite 供後台查詢。
+   並寫入 SQLite 供後台查詢。辨識有逾時上限，超過就算這題答錯，不讓全班等。
+5. 最近幾輪出過的成語不再出；同一場「再來一輪」絕不重複。老師可在成語題庫頁新增成語。
 
 所有賽局狀態都放在記憶體裡（單一程序），因此部署時 Cloud Run 要限制為單一實例。
 """
@@ -26,8 +27,9 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, WebSocket,
 from pydantic import BaseModel
 
 import yzqj_store as store
-from idioms_data import IDIOMS, pick_questions
-from recognition import recognize_character
+import idioms_data
+from idioms_data import all_idioms, distractors_for, pick_questions
+from recognition import RecognitionResult, recognize_character
 
 # ---------------------------------------------------------------------------
 # 設定
@@ -40,8 +42,16 @@ GAME_TTL_SECONDS = 3 * 3600  # 閒置多久後從記憶體清掉
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 去掉容易看錯的 I L O 0 1
 
 
+RECENT_ROUNDS = 6            # 最近幾輪出過的成語不再出
+
+
 def question_seconds() -> float:
-    return float(os.environ.get("YZQJ_QUESTION_SECONDS", "20"))
+    return float(os.environ.get("YZQJ_QUESTION_SECONDS", "18"))
+
+
+def recognize_timeout() -> float:
+    """每位學生的辨識最多等幾秒，超過就算答錯。"""
+    return float(os.environ.get("YZQJ_RECOGNIZE_TIMEOUT", "8"))
 
 
 def reveal_seconds() -> float:
@@ -111,6 +121,7 @@ class Game:
         self.players: dict[str, Player] = {}
         self.host_sockets: set[WebSocket] = set()
         self.questions: list[dict] = []
+        self.used_idioms: set[str] = set()  # 這一場所有輪次出過的成語
         self.current = -1
         self.question_started_at: float | None = None
         self.deadline: float | None = None
@@ -167,14 +178,27 @@ class Game:
         self.round += 1
         for p in self.players.values():
             p.answers = []
-        self.questions = pick_questions(QUESTIONS_PER_ROUND)
         self.started_at = time.time()
+        self.questions = self.pick_round_questions()
         self.finished_at = None
         self.current = -1
         self.results = {}
         self.submissions = {}
         self.touch()
         self._task = asyncio.create_task(self._run_round())
+
+    def pick_round_questions(self) -> list[dict]:
+        """
+        挑這一輪的題目：最近 RECENT_ROUNDS 輪（跨賽局）出過的成語盡量避開，
+        這一場已經出過的絕對避開，並把這輪的題目記進出題紀錄。
+        """
+        recent = store.recent_idioms(RECENT_ROUNDS * QUESTIONS_PER_ROUND)
+        questions = pick_questions(QUESTIONS_PER_ROUND, exclude=recent, must_exclude=self.used_idioms)
+        self.used_idioms.update(q["idiom"] for q in questions)
+        store.log_questions(
+            self.code, self.round, [q["idiom"] for q in questions], self.started_at or time.time()
+        )
+        return questions
 
     def skip(self) -> None:
         """老師手動跳到下一題：結束目前這題的等待。"""
@@ -245,6 +269,7 @@ class Game:
         q = self.questions[self.current]
         started = self.question_started_at or time.time()
         limit_ms = int(question_seconds() * 1000)
+        distractors = distractors_for(q)
 
         async def grade(player: Player) -> tuple[str, dict]:
             sub = self.submissions.get(player.id)
@@ -256,15 +281,33 @@ class Game:
                     "engine": "none",
                     "submitted": False,
                 }
-            rec = await asyncio.to_thread(
-                recognize_character, sub.image_data, q["correct_char"], sub.has_ink
-            )
+            timeout = recognize_timeout()
+            try:
+                rec = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        recognize_character,
+                        sub.image_data,
+                        q["correct_char"],
+                        sub.has_ink,
+                        distractors,
+                        timeout,
+                    ),
+                    timeout + 1.0,  # 引擎本身有 HTTP timeout，這裡多留 1 秒當最後防線
+                )
+            except asyncio.TimeoutError:
+                print(f"[yzqj] game {self.code} recognition timed out for {player.nickname}")
+                rec = RecognitionResult(
+                    recognized_char="", is_correct=False, confidence=0.0, engine="timeout",
+                    detail=f"辨識超過 {timeout:g} 秒",
+                )
             answer_ms = max(0, min(limit_ms, int((sub.submitted_at - started) * 1000)))
             return player.id, {
                 "is_correct": rec.is_correct,
                 "recognized": rec.recognized_char,
                 "answer_ms": answer_ms,
                 "engine": rec.engine,
+                "detail": rec.detail,
+                "timed_out": rec.engine == "timeout",
                 "submitted": True,
             }
 
@@ -372,6 +415,7 @@ class Game:
             "max_players": MAX_PLAYERS,
             "question_seconds": question_seconds(),
             "reveal_seconds": reveal_seconds(),
+            "recognize_timeout": recognize_timeout(),
             "total_questions": QUESTIONS_PER_ROUND,
             "players": players,
             "question": self._question_view(role),
@@ -542,11 +586,77 @@ async def join_game(code: str, req: JoinRequest, request: Request):
 @router.get("/meta")
 def meta():
     return {
-        "idiom_count": len(IDIOMS),
+        "idiom_count": len(all_idioms()),
         "questions_per_round": QUESTIONS_PER_ROUND,
         "question_seconds": question_seconds(),
+        "recognize_timeout": recognize_timeout(),
         "max_players": MAX_PLAYERS,
     }
+
+
+# ----- 成語題庫 -------------------------------------------------------------
+
+
+class IdiomWrong(BaseModel):
+    pos: int
+    char: str
+
+
+class IdiomCreate(BaseModel):
+    idiom: str
+    wrong: list[IdiomWrong]
+    meaning: str = ""
+
+
+def _idiom_view(item: dict) -> dict:
+    return {
+        "idiom": item["idiom"],
+        "wrong": [{"pos": pos, "char": char} for pos, char in item["wrong"]],
+        "meaning": item["meaning"],
+        "source": item.get("source", "builtin"),
+    }
+
+
+@router.get("/idioms")
+def list_idioms():
+    """成語題庫清單：內建在前、自訂在後。任何人都可以看。"""
+    items = [_idiom_view(i) for i in all_idioms()]
+    return {
+        "idioms": items,
+        "builtin_count": sum(1 for i in items if i["source"] == "builtin"),
+        "custom_count": sum(1 for i in items if i["source"] == "custom"),
+        "auth_required": bool(os.environ.get("YZQJ_ADMIN_TOKEN", "")),
+    }
+
+
+@router.post("/idioms", status_code=201)
+def create_idiom(
+    req: IdiomCreate,
+    x_admin_token: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+):
+    """新增自訂成語（有設後台密碼時要帶）。"""
+    _check_admin(x_admin_token, token)
+    try:
+        item = idioms_data.add_custom(req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _idiom_view(item)
+
+
+@router.delete("/idioms/{idiom}", status_code=204)
+def delete_idiom(
+    idiom: str,
+    x_admin_token: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+):
+    """刪除自訂成語；內建的不能刪。"""
+    _check_admin(x_admin_token, token)
+    if any(i["idiom"] == idiom for i in idioms_data.IDIOMS):
+        raise HTTPException(status_code=400, detail="內建成語不能刪除")
+    if not idioms_data.remove_custom(idiom):
+        raise HTTPException(status_code=404, detail="找不到這個自訂成語")
+    return None
 
 
 # ----- 後台 ---------------------------------------------------------------
@@ -577,6 +687,47 @@ def admin_games(
     for g in games:
         g["live"] = g["code"] in GAMES
     return {"games": games, "stats": store.stats(), "live_games": len(GAMES)}
+
+
+class RecognizeDebugRequest(BaseModel):
+    image_data: str
+    expected_char: str
+    distractors: list[str] = []
+    has_ink: bool = True
+
+
+@router.post("/admin/recognize")
+async def admin_recognize(
+    req: RecognizeDebugRequest,
+    x_admin_token: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+):
+    """後台用：拿一張九宮格手寫圖試跑一字千金的辨識判定，看潦草字會不會被放過。"""
+    _check_admin(x_admin_token, token)
+    timeout = recognize_timeout()
+    distractors = req.distractors or distractors_for(
+        {"correct_char": req.expected_char, "wrong_char": req.expected_char}
+    )
+    t0 = time.time()
+    try:
+        rec = await asyncio.wait_for(
+            asyncio.to_thread(
+                recognize_character, req.image_data, req.expected_char, req.has_ink, distractors, timeout
+            ),
+            timeout + 1.0,
+        )
+    except asyncio.TimeoutError:
+        rec = RecognitionResult(recognized_char="", is_correct=False, confidence=0.0, engine="timeout")
+    return {
+        "expected_char": req.expected_char,
+        "distractors": distractors,
+        "recognized": rec.recognized_char,
+        "is_correct": rec.is_correct,
+        "confidence": rec.confidence,
+        "engine": rec.engine,
+        "detail": rec.detail,
+        "elapsed_ms": int((time.time() - t0) * 1000),
+    }
 
 
 @router.get("/admin/games/{code}")

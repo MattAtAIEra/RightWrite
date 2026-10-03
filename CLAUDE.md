@@ -48,6 +48,8 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 - `GET /api/yzqj/games/{code}` / `POST .../join` — game info / join with nickname (records IP, max 10)
 - `WS /ws/yzqj/{code}?role=host&token=…` / `?role=player&player_id=…` — snapshots, stroke relay, submit
 - `GET /api/yzqj/admin/games` — results backoffice (header `X-Admin-Token` when `YZQJ_ADMIN_TOKEN` is set)
+- `GET/POST/DELETE /api/yzqj/idioms` — idiom bank (built-in + custom JSON at `YZQJ_IDIOMS_PATH`); write needs admin token
+- `POST /api/yzqj/admin/recognize` — try the strict handwriting verdict on one image (debug)
 
 **Frontend routing**: `frontend/src/main.tsx` picks the app by pathname (portal / rightwrite / yzqj);
 一字千金 has its own tiny history-API router in `src/yzqj/router.ts`.
@@ -62,9 +64,11 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 
 **Article generation**: Uses predefined sentence templates (not LLM-generated). Randomly picks 5-8 characters from selected lesson range, inserts into templates, then swaps some with similar_wrong alternatives. Tracks wrong char positions in display text.
 
-**Vision API fallback**: `backend/recognition.py` tries Google Cloud Vision first; if unavailable, returns the expected character with 0.5 confidence (graceful degradation). 一字千金 additionally treats a blank canvas as wrong in fallback mode.
+**Recognition** (`backend/recognition.py`): 改錯字神器 runs Gemini thinking-low → escalate → Vision (in main.py). 一字千金 uses `recognize_character`: one Gemini call returning `{char, closest, clear}` against candidate characters (correct + question's wrong char + confusables from `vocab_data.get_similar_wrong`); all three must point at the correct char. Per-student timeout `YZQJ_RECOGNIZE_TIMEOUT` (default 8s) → counted wrong. Engines without credentials are skipped; with no credentials at all, fallback mode marks any ink as correct (0.5) and blank as wrong.
 
-**Game state** (backend/yzqj.py): all live games are in-process memory (`GAMES` dict) with asyncio timers; results are persisted to SQLite (`backend/yzqj_store.py`, path `YZQJ_DB_PATH`). Deploy as a single instance.
+**Game state** (backend/yzqj.py): all live games are in-process memory (`GAMES` dict) with asyncio timers; results and a `question_log` are persisted to SQLite (`backend/yzqj_store.py`, path `YZQJ_DB_PATH`). Deploy as a single instance. Question picking avoids idioms from the last 6 rounds across games and never repeats within a game.
+
+**Idiom bank** (backend/idioms_data.py): built-in `IDIOMS` plus custom entries in a JSON file (`YZQJ_IDIOMS_PATH`); `all_idioms()` merges both. In production the JSON lives on a Cloud Storage volume mounted at `/data` (see cloudbuild.yaml).
 
 **Calligraphy font**: `frontend/public/fonts/ARPLUKaiTW-yzqj.woff2` is a subset of AR PL UKai TW containing only the idiom characters. Regenerate with `scripts/build_calligraphy_font.py` whenever `backend/idioms_data.py` changes.
 
@@ -72,7 +76,9 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
 - `YZQJ_ADMIN_TOKEN` — password for the 一字千金 results backoffice (unset = open)
 - `YZQJ_DB_PATH` — SQLite path for game results (default `backend/data/yzqj.sqlite3`)
-- `YZQJ_QUESTION_SECONDS` / `YZQJ_REVEAL_SECONDS` / `YZQJ_GRACE_SECONDS` — timing overrides (tests use short values)
+- `YZQJ_QUESTION_SECONDS` (default 18) / `YZQJ_REVEAL_SECONDS` / `YZQJ_GRACE_SECONDS` — timing overrides (tests use short values)
+- `YZQJ_RECOGNIZE_TIMEOUT` — seconds to wait for one student's recognition before counting it wrong (default 8)
+- `YZQJ_IDIOMS_PATH` — custom idiom JSON (default `backend/data/custom_idioms.json`; Cloud Run uses `/data/custom_idioms.json`)
 
 ## Frontend Aesthetics
 
@@ -103,5 +109,6 @@ When generating or modifying frontend UI, always follow these principles:
 
 Google Cloud Run on `asia-east1` via `cloudbuild.yaml`:
 - 512Mi memory, 1 CPU, 0-1 instances (single instance: 一字千金 keeps game state in memory), request timeout 3600s for WebSockets
+- gen2 execution environment with Cloud Storage bucket `rightwrite-data-teamfollowme` mounted at `/data` (custom idioms persist across restarts)
 - Port 8080, unauthenticated access
 - Multi-stage Dockerfile: frontend build → copy static assets into Python image

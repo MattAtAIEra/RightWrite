@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { createGame } from "./api";
+import { useEffect, useState } from "react";
+import { createGame, fetchMeta } from "./api";
 import { hostTokenKey, navigate, normalizeCode } from "./router";
 import Calligraphy from "./components/Calligraphy";
 
@@ -7,6 +7,17 @@ export default function Landing() {
   const [code, setCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seconds, setSeconds] = useState(18);
+  const [idiomCount, setIdiomCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchMeta()
+      .then((m) => {
+        setSeconds(m.question_seconds);
+        setIdiomCount(m.idiom_count);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -42,8 +53,8 @@ export default function Landing() {
         <p className="yz-tagline">成語裡藏了一個錯字，看誰最快寫出正確的字！</p>
         <ul className="yz-rules">
           <li>📱 掃 QR Code 加入，最多 10 人</li>
-          <li>✍️ 每題 20 秒，在九宮格寫出正確的字</li>
-          <li>🏆 一輪 5 題，結束看正確率與排名</li>
+          <li>✍️ 每題 {seconds} 秒，在九宮格寫出正確的字</li>
+          <li>🏆 一輪 5 題，結束看正確率與排名{idiomCount != null && <>（題庫 {idiomCount} 個成語）</>}</li>
         </ul>
       </header>
 
@@ -84,6 +95,7 @@ export default function Landing() {
 
       <footer className="yz-footer">
         <a href="/">← 回學習樂園</a>
+        <a href="/yzqj/idioms">成語題庫</a>
         <a href="/yzqj/admin">成績後台</a>
       </footer>
     </div>

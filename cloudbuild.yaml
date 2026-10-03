@@ -30,5 +30,14 @@ steps:
       - "8080"
       - "--set-secrets"
       - "GEMINI_API_KEY=gemini-api-key:latest"
+      # 自訂成語存在 Cloud Storage bucket 掛載的 /data，實例重啟不會消失（gen2 才支援 volume）
+      - "--execution-environment"
+      - "gen2"
+      - "--add-volume"
+      - "name=data,type=cloud-storage,bucket=rightwrite-data-teamfollowme"
+      - "--add-volume-mount"
+      - "volume=data,mount-path=/data"
+      - "--set-env-vars"
+      - "YZQJ_IDIOMS_PATH=/data/custom_idioms.json"
 images:
   - "gcr.io/$PROJECT_ID/rightwrite"

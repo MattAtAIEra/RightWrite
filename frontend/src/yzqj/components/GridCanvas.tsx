@@ -105,7 +105,11 @@ const GridCanvas = forwardRef<GridCanvasHandle, Props>(function GridCanvas(
     e.preventDefault();
     const pt = toPoint(e);
     if (!pt) return;
-    canvasRef.current?.setPointerCapture(e.pointerId);
+    try {
+      canvasRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      /* 某些觸控瀏覽器不支援 capture，照常畫 */
+    }
     drawingRef.current = true;
     strokeIdRef.current += 1;
     strokesRef.current.push([pt]);
@@ -189,6 +193,7 @@ const GridCanvas = forwardRef<GridCanvasHandle, Props>(function GridCanvas(
       onPointerUp={handleUp}
       onPointerCancel={handleUp}
       onPointerLeave={handleUp}
+      onLostPointerCapture={handleUp}
       aria-label="九宮格書寫區"
     />
   );
