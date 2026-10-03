@@ -7,4 +7,6 @@ dist/
 .vite/
 .DS_Store
 ~$*
+backend/data/
+.cache/
 .claude/

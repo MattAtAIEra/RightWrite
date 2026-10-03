@@ -2,7 +2,6 @@
 RightWrite - 國小改錯字練習神器
 Backend API server
 """
-import base64
 import json
 import logging
 import math
@@ -28,6 +27,11 @@ from vocab_data import (
     get_all_characters_in_range,
     get_all_compounds_in_range,
 )
+from recognition import (
+    recognize_with_gemini as _recognize_with_gemini,
+    recognize_with_vision_api as _recognize_with_vision_api,
+)
+import yzqj
 
 
 T = TypeVar("T")
@@ -64,6 +68,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 一字千金（多人即時成語改錯競賽）
+app.include_router(yzqj.router)
+app.include_router(yzqj.ws_router)
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -384,59 +392,6 @@ def recognize_handwriting(req: RecognizeRequest):
         is_correct=False,
         confidence=0.0,
     )
-
-
-def _recognize_with_vision_api(image_data_b64: str) -> tuple[str, float]:
-    """Use Google Cloud Vision API to recognize handwritten Chinese character."""
-    from google.cloud import vision
-
-    if "," in image_data_b64:
-        image_data_b64 = image_data_b64.split(",", 1)[1]
-
-    image_bytes = base64.b64decode(image_data_b64)
-
-    client = vision.ImageAnnotatorClient()
-    image = vision.Image(content=image_bytes)
-
-    response = client.text_detection(image=image)
-    texts = response.text_annotations
-
-    if texts:
-        recognized = texts[0].description.strip()
-        if recognized:
-            return recognized[0], 0.9
-    raise ValueError("No text recognized")
-
-
-def _recognize_with_gemini(image_data_b64: str) -> tuple[str, float]:
-    """Use Gemini Vision to recognize a handwritten Chinese character."""
-    from google import genai
-    from google.genai import types
-
-    if "," in image_data_b64:
-        image_data_b64 = image_data_b64.split(",", 1)[1]
-
-    client = genai.Client()
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=[
-            types.Part.from_bytes(
-                data=base64.b64decode(image_data_b64),
-                mime_type="image/png",
-            ),
-            (
-                "這張圖片是一個手寫的中文字（寫在九宮格上）。"
-                "請辨識這個字，只回覆那一個中文字，不要有任何其他文字或標點。"
-                "如果完全無法辨識，只回覆 ？"
-            ),
-        ],
-    )
-
-    recognized = response.text.strip()
-    # Accept only a single CJK character
-    if len(recognized) == 1 and '\u4e00' <= recognized <= '\u9fff':
-        return recognized, 0.85
-    raise ValueError(f"Could not recognize character: {recognized!r}")
 
 
 @app.post("/api/check")
