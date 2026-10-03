@@ -693,7 +693,7 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - 前端：`vitest` 80/80；`tsc -b`＋`vite build` 通過
 - 真實瀏覽器 E2E（Chrome headless、本機 :8002 production build）：滑鼠與 CDP 觸控各一次點擊 → 剛好 1 個 submit 訊息、老師端卡片立即確認；成語題庫頁 142 筆載入 → 新增「守望相助／住」預覽正確 → 清單 143 筆含自訂徽章 → 搜尋 → 重複新增顯示「已經在題庫裡了」→ 刪除；首頁秒數與題庫數來自 meta
 - Gemini 實測（本機拿 Secret Manager 的金鑰直接呼叫）：見上面第 6 項的對照表
-- Build/部署：成功（Cloud Run `__REVISION__`，asia-east1，取代 00053-szd；gen2＋Cloud Storage volume）；線上驗證：__LIVE__
+- Build/部署：成功（Cloud Run `rightwrite-00056-l4d`，asia-east1，取代 00053-szd；gen2＋Cloud Storage volume）；線上驗證：`/api/yzqj/meta` 回 18 秒／8 秒逾時／142 個成語；首頁顯示「每題 18 秒」與成語題庫連結；題庫頁在線上新增「守望相助」→ 清單 143 筆 → 刪除，`gs://rightwrite-data-teamfollowme/custom_idioms.json` 確實被寫入（gcsfuse 可寫）；`POST /api/yzqj/admin/recognize` 丟 9 張合成圖：8/9 符合預期（同樣只漏「嗚→鳴」），伺服器端耗時 1.1～3.1 秒、冷啟動第一題 6.1 秒，都在 8 秒內；Chrome 一次點擊送出 → 剛好 1 個 submit、老師端卡片立即確認
 
 ---
 
