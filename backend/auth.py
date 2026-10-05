@@ -36,10 +36,26 @@ def admin_configured() -> bool:
     return bool(admin_password())
 
 
-def admin_allowed_ips() -> set[str]:
-    """ADMIN_ALLOWED_IPS：逗號分隔的 IP 名單；空的代表不限制（本機開發）。"""
+def admin_allowed_ips() -> list:
+    """
+    ADMIN_ALLOWED_IPS：逗號分隔，每一項可以是 IPv4、IPv6 或 CIDR 網段
+    （例如 114.32.41.156, 2001:b011:1234::/64）；空的代表不限制（本機開發）。
+    寫壞的項目會被略過並留 log，不會讓整個名單失效。
+    """
+    import ipaddress
+    import logging
+
     raw = os.environ.get("ADMIN_ALLOWED_IPS", "")
-    return {ip.strip() for ip in raw.split(",") if ip.strip()}
+    networks = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            logging.getLogger(__name__).warning("ADMIN_ALLOWED_IPS 裡有看不懂的項目：%r", item)
+    return networks
 
 
 def trusted_client_ip(request: Request) -> str:
@@ -56,8 +72,19 @@ def trusted_client_ip(request: Request) -> str:
 
 
 def ip_allowed(request: Request) -> bool:
+    import ipaddress
+
     allowed = admin_allowed_ips()
-    return not allowed or trusted_client_ip(request) in allowed
+    if not allowed:
+        return True
+    try:
+        ip = ipaddress.ip_address(trusted_client_ip(request))
+    except ValueError:
+        return False
+    # IPv4 以 IPv6 形式出現（::ffff:1.2.3.4）時換回 IPv4 再比
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return any(ip in net for net in allowed)
 
 
 def require_allowed_ip(request: Request) -> None:

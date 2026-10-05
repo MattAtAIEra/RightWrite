@@ -236,3 +236,13 @@ def test_cloud_run_takes_last_forwarded_ip(client, monkeypatch):
     assert client.get("/api/admin/me", headers=spoof).status_code == 404
     real = {"x-forwarded-for": "198.51.100.9, 114.32.41.156"}
     assert client.get("/api/admin/me", headers=real).status_code == 401  # 過了 IP 關，只是還沒登入
+
+
+def test_allowlist_accepts_ipv6_and_cidr(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_ALLOWED_IPS", "114.32.41.156, 2001:b011:1234::/64, 10.0.0.0/8, not-an-ip")
+    ok = {"x-forwarded-for": "2001:b011:1234:0:abcd::1"}
+    assert client.get("/api/admin/me", headers=ok).status_code == 401  # 過了 IP 關
+    assert client.get("/api/admin/me", headers={"x-forwarded-for": "10.20.30.40"}).status_code == 401
+    assert client.get("/api/admin/me", headers={"x-forwarded-for": "::ffff:114.32.41.156"}).status_code == 401
+    assert client.get("/api/admin/me", headers={"x-forwarded-for": "2001:b011:9999::1"}).status_code == 404
+    assert client.get("/api/admin/me", headers={"x-forwarded-for": "198.51.100.9"}).status_code == 404
