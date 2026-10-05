@@ -65,13 +65,14 @@ def grace_seconds() -> float:
 
 
 def client_ip(headers: Any, client: Any) -> str:
-    """Cloud Run / 反向代理後面要看 X-Forwarded-For 的第一個位址。"""
-    forwarded = headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
+    """
+    Cloud Run 會把客戶端 IP 附加在 X-Forwarded-For 最後面（客戶端自己塞的排前面），所以在 Cloud Run 上取最後一個；
+    本機沒有 proxy 時取第一個，跟 auth.trusted_client_ip 同一個規則。
+    """
+    forwarded = headers.get("x-forwarded-for", "")
+    parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+    if parts:
+        return parts[-1] if os.environ.get("K_SERVICE") else parts[0]
     return client.host if client else ""
 
 

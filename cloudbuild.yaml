@@ -38,6 +38,6 @@ steps:
       - "--add-volume-mount"
       - "volume=data,mount-path=/data"
       - "--set-env-vars"
-      - "YZQJ_IDIOMS_PATH=/data/custom_idioms.json,USAGE_DIR=/data/usage,ADMIN_EMAIL=matt.jiang@gmail.com"
+      - "YZQJ_IDIOMS_PATH=/data/custom_idioms.json,USAGE_DIR=/data/usage,ADMIN_EMAIL=matt.jiang@gmail.com,ADMIN_ALLOWED_IPS=114.32.41.156"
 images:
   - "gcr.io/$PROJECT_ID/rightwrite"

@@ -637,6 +637,7 @@ def admin_login(req: AdminLoginRequest, request: Request, response: Response):
     """帳號密碼登入，成功就發 12 小時的管理 cookie。同一個 IP 十分鐘內錯 8 次就暫停。"""
     import time as _time
 
+    auth.require_allowed_ip(request)
     ip = usage.client_ip(request)
     if _too_many_login_failures(ip):
         raise HTTPException(status_code=429, detail="嘗試次數太多，請十分鐘後再試")
@@ -656,10 +657,21 @@ def admin_logout(response: Response):
 
 @app.get("/api/admin/me")
 def admin_me(request: Request):
+    auth.require_allowed_ip(request)
     email = auth.current_admin(request)
     if not email:
         raise HTTPException(status_code=401, detail="尚未登入")
     return {"email": email}
+
+
+@app.get("/api/ip")
+def whoami(request: Request):
+    """回看伺服器認定的客戶端 IP 與 X-Forwarded-For，用來確認 IP 名單設定正確。"""
+    return {
+        "ip": auth.trusted_client_ip(request),
+        "x_forwarded_for": request.headers.get("x-forwarded-for", ""),
+        "admin_ip_restricted": bool(auth.admin_allowed_ips()),
+    }
 
 
 @app.get("/api/admin/usage")
@@ -708,8 +720,10 @@ if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
-    def serve_frontend(full_path: str):
-        """Serve the React frontend."""
+    def serve_frontend(full_path: str, request: Request):
+        """Serve the React frontend. 管理介面的頁面只給名單內的 IP，其他人看到 404。"""
+        if full_path == auth.ADMIN_PATH.lstrip("/") or full_path.startswith(auth.ADMIN_PATH.lstrip("/") + "/"):
+            auth.require_allowed_ip(request)
         file_path = STATIC_DIR / full_path
         if file_path.is_file():
             return FileResponse(file_path)

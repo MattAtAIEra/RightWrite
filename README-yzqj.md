@@ -12,9 +12,9 @@
 | `/yzqj` | 一字千金首頁：老師建立賽局／學生輸入代碼 |
 | `/yzqj/host/{code}` | 老師監看畫面（只能在建立賽局的那個瀏覽器開啟） |
 | `/g/{code}` | 學生加入與作答，QR Code 指到這裡 |
-| `/admin/results` | 成績後台（要登入）：每場賽局的參加者、IP、各題結果、排名 |
-| `/admin/idioms` | 成語題庫（要登入）：看全部成語（內建＋自訂）、新增／刪除自訂成語 |
-| `/admin/usage` | 使用量儀錶板（要登入）：每天的辨識次數、session 數、額度與 bot 擋下次數 |
+| `/backstage-admin/results` | 成績後台（要登入，只開放名單內 IP）：每場賽局的參加者、IP、各題結果、排名 |
+| `/backstage-admin/idioms` | 成語題庫（要登入，只開放名單內 IP）：看全部成語（內建＋自訂）、新增／刪除自訂成語 |
+| `/backstage-admin/usage` | 使用量儀錶板（要登入，只開放名單內 IP）：每天的辨識次數、session 數、額度與 bot 擋下次數 |
 
 ## 流程
 
@@ -54,7 +54,8 @@
 
 | 變數 | 預設 | 說明 |
 |---|---|---|
-| `ADMIN_EMAIL`、`ADMIN_PASSWORD` | （沒設就全部拒絕） | 管理介面 `/admin` 的帳號密碼；密碼放 Secret Manager `rightwrite-admin-password` |
+| `ADMIN_EMAIL`、`ADMIN_PASSWORD` | （沒設就全部拒絕） | 管理介面 `/backstage-admin` 的帳號密碼；密碼放 Secret Manager `rightwrite-admin-password` |
+| `ADMIN_ALLOWED_IPS` | （空，不限制） | 逗號分隔的 IP 名單；線上設 `114.32.41.156`，名單外的 IP 連管理頁面都是 404。換了網路要改這個值再重新部署 |
 | `YZ_DAILY_LIMIT` | `50` | 每個瀏覽器 session 一天最多幾次辨識，超過該題算錯並顯示「今日使用已經達到免費額度的上限」 |
 | `YZQJ_DB_PATH` | `backend/data/yzqj.sqlite3` | 成績與出題紀錄資料庫位置 |
 | `YZQJ_IDIOMS_PATH` | `backend/data/custom_idioms.json` | 自訂成語 JSON（線上掛在 Cloud Storage volume 的 `/data`） |

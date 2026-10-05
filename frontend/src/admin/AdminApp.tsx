@@ -9,18 +9,18 @@ import IdiomsView from "../yzqj/IdiomsView";
 import AdminView from "../yzqj/AdminView";
 
 /**
- * 管理介面：/admin 底下四個功能，全部要先登入。
- *   /admin/usage    使用次數分佈儀錶板
- *   /admin/idioms   成語題庫
- *   /admin/results  成績後台
- *   /admin/vocab    生字庫
+ * 管理介面：/backstage-admin 底下四個功能，全部要先登入，而且只開放 ADMIN_ALLOWED_IPS 名單內的 IP。
+ *   /backstage-admin/usage    使用次數分佈儀錶板
+ *   /backstage-admin/idioms   成語題庫
+ *   /backstage-admin/results  成績後台
+ *   /backstage-admin/vocab    生字庫
  * 登入狀態放在 HttpOnly cookie，前端只問 /api/admin/me。
  */
 const TABS = [
-  { path: "/admin/usage", label: "使用量儀錶板" },
-  { path: "/admin/idioms", label: "成語題庫" },
-  { path: "/admin/results", label: "成績後台" },
-  { path: "/admin/vocab", label: "生字庫" },
+  { path: "/backstage-admin/usage", label: "使用量儀錶板" },
+  { path: "/backstage-admin/idioms", label: "成語題庫" },
+  { path: "/backstage-admin/results", label: "成績後台" },
+  { path: "/backstage-admin/vocab", label: "生字庫" },
 ];
 
 export default function AdminApp() {
@@ -42,7 +42,7 @@ export default function AdminApp() {
   return (
     <div className="ad-root">
       <header className="ad-bar">
-        <div className="ad-brand" onClick={() => navigate("/admin/usage")} role="link" tabIndex={0}>
+        <div className="ad-brand" onClick={() => navigate("/backstage-admin/usage")} role="link" tabIndex={0}>
           RightWrite 管理介面
         </div>
         <nav className="ad-tabs" aria-label="管理功能">
@@ -72,10 +72,10 @@ export default function AdminApp() {
         </div>
       </header>
       <main className="ad-main">
-        {active.path === "/admin/usage" && <UsageView />}
-        {active.path === "/admin/idioms" && <IdiomsView />}
-        {active.path === "/admin/results" && <AdminView />}
-        {active.path === "/admin/vocab" && <VocabView />}
+        {active.path === "/backstage-admin/usage" && <UsageView />}
+        {active.path === "/backstage-admin/idioms" && <IdiomsView />}
+        {active.path === "/backstage-admin/results" && <AdminView />}
+        {active.path === "/backstage-admin/vocab" && <VocabView />}
       </main>
     </div>
   );

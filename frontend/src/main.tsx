@@ -11,10 +11,10 @@ import AdminApp from "./admin/AdminApp.tsx";
  *   /               國語學習樂園（入口）
  *   /rightwrite     改錯字神器
  *   /yzqj, /g/:code 一字千金
- *   /admin          管理介面（要登入）
+ *   /backstage-admin  管理介面（要登入，只開放名單內的 IP）
  */
 function pickApp(pathname: string): { name: string; element: React.ReactNode } {
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  if (pathname === "/backstage-admin" || pathname.startsWith("/backstage-admin/")) {
     return { name: "admin", element: <AdminApp /> };
   }
   if (pathname.startsWith("/yzqj") || pathname.startsWith("/g/")) {

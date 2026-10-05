@@ -741,7 +741,35 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 ---
 
 
+## Phase 19：管理網址改成 /backstage-admin，並限制只有 114.32.41.156 能存取
+
+**日期**：2026-10-05
+**觸發**：用戶要求管理網址不要用 `/admin` 這種一猜就中的名字，改成 `/backstage-admin`，同時只允許 IP 114.32.41.156 存取
+
+### 完成項目
+
+1. **網址**：前端路由、分頁路徑、舊網址轉向全部改成 `/backstage-admin/...`；API 路徑不變（它們本來就要登入）
+2. **IP 名單**（`backend/auth.py`）：`ADMIN_ALLOWED_IPS` 逗號分隔；`require_admin` 先查 IP，登入、`/me`、所有管理 API 與 `/backstage-admin*` 頁面對名單外的 IP 一律回 404，讓管理介面對外看起來不存在。名單空的不限制（本機與測試）
+3. **客戶端 IP 要取對**：Cloud Run 會把真實 IP「附加」在 `X-Forwarded-For` 最後面，客戶端自己塞的假 IP 排在前面；原本的 `client_ip` 取第一個，名單會被一個 header 騙過。改成有 `K_SERVICE` 時取最後一個，本機取第一個；`usage.client_ip` 與 `yzqj.client_ip` 同一規則。加 `GET /api/ip` 回看伺服器認定的 IP，方便換網路時確認
+4. `cloudbuild.yaml` 加 `ADMIN_ALLOWED_IPS=114.32.41.156`
+
+### 發現與修正
+
+- **IP 名單如果取 X-Forwarded-For 的第一個，等於沒有名單**：任何人加一個 header 就能冒充。測試 `test_cloud_run_takes_last_forwarded_ip` 固定這個行為：`114.32.41.156, 198.51.100.9` 在 Cloud Run 規則下認定為 198.51.100.9
+
+### 測試結果
+
+- 後端：`pytest` 51/51（新增名單擋下／放行、名單空不限制、Cloud Run 取最後一個 IP 三項）
+- 前端：`tsc -b`＋`vite build` 通過
+- 本機 E2E（:8004，`ADMIN_ALLOWED_IPS=127.0.0.1`）：名單內 IP 整套管理流程 ALL OK（登入、四分頁、3 次後 429、登出）；用 `X-Forwarded-For: 1.2.3.4` 冒充名單外 IP，`/backstage-admin`、`/backstage-admin/usage`、`/api/admin/me`、帶密碼的 `/api/yzqj/idioms` 與 `/api/admin/usage` 全部 404，`/`、`/rightwrite`、`/yzqj`、`/api/yzqj/meta` 仍 200
+- Build/部署：成功（Cloud Run `__REVISION__`，取代 00059-2wf）；線上驗證：__LIVE__
+
+---
+
+
 ## TODO
+
+- [ ] Phase 19 follow-up — 名單只有一個固定 IP，Matt 換網路（手機熱點、出差）會被鎖在外面；改 `cloudbuild.yaml` 的 `ADMIN_ALLOWED_IPS` 再部署，或先用 `GET /api/ip` 看自己現在的 IP
 
 - [ ] Phase 18 follow-up — 密碼只有一組且不會過期；要換就到 Secret Manager 加新版本再重新部署。若要「寄 OTP 到信箱」的動態密碼，需要接一個寄信服務
 - [ ] Phase 18 follow-up — bot 攔截只看 UA 與 session 數，偽裝成瀏覽器的腳本仍可達到每 IP 100 session × 60 次；若看到儀錶板異常，下一步是加 Cloudflare Turnstile 或 reCAPTCHA

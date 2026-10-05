@@ -10,7 +10,7 @@ import PlayerView from "./PlayerView";
  *   /yzqj              首頁（老師建立 / 學生輸入代碼）
  *   /yzqj/host/:code   老師監看畫面
  *   /g/:code           學生加入與作答（QR Code 指到這裡，短一點好掃）
- *   /yzqj/admin、/yzqj/idioms  舊網址，轉到 /admin 的管理介面
+ *   /yzqj/admin、/yzqj/idioms  舊網址，轉到管理介面
  */
 export default function YzqjApp() {
   const path = usePathname();
@@ -28,7 +28,7 @@ export default function YzqjApp() {
   } else if (playerMatch) {
     page = <PlayerView key={playerMatch[1]} code={playerMatch[1].toUpperCase()} />;
   } else if (/^\/yzqj\/(admin|idioms)\/?$/.test(path)) {
-    window.location.replace(path.includes("idioms") ? "/admin/idioms" : "/admin/results");
+    window.location.replace(path.includes("idioms") ? "/backstage-admin/idioms" : "/backstage-admin/results");
     page = <div className="yz-loader">轉到管理介面…</div>;
   } else {
     page = <Landing />;

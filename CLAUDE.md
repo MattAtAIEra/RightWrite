@@ -5,7 +5,7 @@
 - `/` **國語學習樂園** — 入口 portal，連到下面兩個應用
 - `/rightwrite` **改錯字神器** — 單人改錯字練習（康軒版 114 學年度第 2 學期等）
 - `/yzqj`、`/g/{code}` **一字千金** — 多人即時成語改錯競賽（QR Code 加入、九宮格手寫、筆跡實況轉播、排名）。細節見 `README-yzqj.md`
-- `/admin` **管理介面**（要登入）— 使用量儀錶板、成語題庫、成績後台、生字庫
+- `/backstage-admin` **管理介面**（要登入，且只開放 `ADMIN_ALLOWED_IPS` 名單內的 IP，其他 IP 看到 404）— 使用量儀錶板、成語題庫、成績後台、生字庫
 
 ## Development Commands
 
@@ -56,7 +56,8 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 - `POST /api/admin/login` {email, password} → HttpOnly cookie `rw_admin` (12h, HMAC-signed); `POST /api/admin/logout`; `GET /api/admin/me`
 - `GET /api/admin/usage?days=30` — daily recognitions / sessions / quota & bot blocks + today's top sessions
 - `GET /api/admin/vocab?grade_id=` — every lesson's characters with `similar_wrong` and examples
-- Every admin route uses `Depends(auth.require_admin)`: cookie session, or header `X-Admin-Token: <ADMIN_PASSWORD>` for scripts. With no `ADMIN_PASSWORD` set, admin routes always 401.
+- Every admin route uses `Depends(auth.require_admin)`: IP allowlist first (`ADMIN_ALLOWED_IPS`, 404 when not listed; empty = no restriction), then cookie session or header `X-Admin-Token: <ADMIN_PASSWORD>` for scripts. With no `ADMIN_PASSWORD` set, admin routes always 401. The SPA page `/backstage-admin*` is also 404 for unlisted IPs.
+- Client IP: on Cloud Run (`K_SERVICE` set) the **last** `X-Forwarded-For` entry is the real client (Cloud Run appends it; client-supplied values come first); locally the first entry. `GET /api/ip` echoes what the server sees.
 
 **Abuse control** (`backend/usage.py`): costly endpoints (`/api/recognize`, yzqj create/join + grading) require a signed browser session cookie `rw_sid` (issued on demand, max `SESSION_CREATE_LIMIT_PER_IP`=100 new sessions per IP per day), reject bot User-Agents (403), and enforce daily quotas per session: `RW_DAILY_LIMIT`=60 recognitions for 改錯字神器, `YZ_DAILY_LIMIT`=50 for 一字千金 (429 / result `engine=quota` with message 「今日使用已經達到免費額度的上限」). Daily stats persist as `USAGE_DIR/<YYYY-MM-DD>.json` (Taipei dates; `/data/usage` on Cloud Run).
 
@@ -84,6 +85,7 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 **Environment variables**:
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
 - `ADMIN_EMAIL` (default matt.jiang@gmail.com) / `ADMIN_PASSWORD` (Secret Manager `rightwrite-admin-password`) / `ADMIN_SESSION_SECRET` (Secret Manager `rightwrite-session-secret`) — admin login
+- `ADMIN_ALLOWED_IPS` — comma-separated IPs allowed to reach `/backstage-admin` and admin APIs (production: `114.32.41.156`); empty = no restriction
 - `RW_DAILY_LIMIT` (60) / `YZ_DAILY_LIMIT` (50) / `SESSION_CREATE_LIMIT_PER_IP` (100) / `USAGE_DIR` — quotas and usage stats
 - `YZQJ_ADMIN_TOKEN` — password for the 一字千金 results backoffice (unset = open)
 - `YZQJ_DB_PATH` — SQLite path for game results (default `backend/data/yzqj.sqlite3`)

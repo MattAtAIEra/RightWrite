@@ -202,3 +202,37 @@ def test_usage_stats_endpoint_and_flush(client, tmp_path):
     # 重新載入後數字還在（模擬實例重啟）
     usage.STORE.reset_for_tests()
     assert usage.STORE.stats(1)["today"]["rw_recognitions"] == 1
+
+
+# ----- IP 允許名單 -------------------------------------------------------------
+
+
+def test_admin_ip_allowlist(client, monkeypatch):
+    # TestClient 的 client.host 是 "testclient"
+    monkeypatch.setenv("ADMIN_ALLOWED_IPS", "203.0.113.7")
+    assert client.post("/api/admin/login", json={"email": "matt.jiang@gmail.com", "password": "secret-token"}).status_code == 404
+    assert client.get("/api/admin/me").status_code == 404
+    assert client.get("/api/yzqj/idioms?token=secret-token").status_code == 404
+    assert client.get("/api/admin/usage?token=secret-token").status_code == 404
+    # 名單內的 IP（本機規則：X-Forwarded-For 第一個）
+    ok = client.post(
+        "/api/admin/login",
+        json={"email": "matt.jiang@gmail.com", "password": "secret-token"},
+        headers={"x-forwarded-for": "203.0.113.7"},
+    )
+    assert ok.status_code == 200
+    assert client.get("/api/admin/usage", headers={"x-forwarded-for": "203.0.113.7"}).status_code == 200
+    # 名單空的就不限制
+    monkeypatch.setenv("ADMIN_ALLOWED_IPS", "")
+    assert client.get("/api/admin/me").status_code == 200
+
+
+def test_cloud_run_takes_last_forwarded_ip(client, monkeypatch):
+    """Cloud Run 把真實 IP 附加在最後，客戶端塞在前面的假 IP 不能騙過名單。"""
+    monkeypatch.setenv("ADMIN_ALLOWED_IPS", "114.32.41.156")
+    monkeypatch.setenv("K_SERVICE", "rightwrite")
+    spoof = {"x-forwarded-for": "114.32.41.156, 198.51.100.9"}
+    assert client.get("/api/ip", headers=spoof).json()["ip"] == "198.51.100.9"
+    assert client.get("/api/admin/me", headers=spoof).status_code == 404
+    real = {"x-forwarded-for": "198.51.100.9, 114.32.41.156"}
+    assert client.get("/api/admin/me", headers=real).status_code == 401  # 過了 IP 關，只是還沒登入
