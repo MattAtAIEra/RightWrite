@@ -762,14 +762,14 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - 後端：`pytest` 51/51（新增名單擋下／放行、名單空不限制、Cloud Run 取最後一個 IP 三項）
 - 前端：`tsc -b`＋`vite build` 通過
 - 本機 E2E（:8004，`ADMIN_ALLOWED_IPS=127.0.0.1`）：名單內 IP 整套管理流程 ALL OK（登入、四分頁、3 次後 429、登出）；用 `X-Forwarded-For: 1.2.3.4` 冒充名單外 IP，`/backstage-admin`、`/backstage-admin/usage`、`/api/admin/me`、帶密碼的 `/api/yzqj/idioms` 與 `/api/admin/usage` 全部 404，`/`、`/rightwrite`、`/yzqj`、`/api/yzqj/meta` 仍 200
-- Build/部署：成功（Cloud Run `__REVISION__`，取代 00059-2wf）；線上驗證：__LIVE__
+- Build/部署：成功（Cloud Run `rightwrite-00062-lr4`，取代 00059-2wf）；線上驗證：從 114.32.41.156（Matt 透過 VPN 連公司網路的固定 IP）：`/api/ip` 回 114.32.41.156，帶假 header `X-Forwarded-For: 1.2.3.4` 時 Cloud Run 把真實 IP 附加在後（`1.2.3.4,114.32.41.156`）且伺服器仍認定 114.32.41.156；`/backstage-admin` 200、`/api/admin/me` 未登入 401、舊網址 `/yzqj/idioms` 轉到 `/backstage-admin/idioms`、登入後四個分頁載入（成語 142 筆、生字庫 12 課）、登出後回登入頁；名單外 IP 用 Cloud Build 工作機探測（build `da0b52e7`）：`/backstage-admin`、`/api/admin/me`、`/api/yzqj/idioms` 皆 404，`/` 與 `/yzqj` 200
 
 ---
 
 
 ## TODO
 
-- [ ] Phase 19 follow-up — 名單只有一個固定 IP，Matt 換網路（手機熱點、出差）會被鎖在外面；改 `cloudbuild.yaml` 的 `ADMIN_ALLOWED_IPS` 再部署，或先用 `GET /api/ip` 看自己現在的 IP
+- [ ] Phase 19 note — 114.32.41.156 是公司網路的固定 IP，Matt 用 VPN 連進公司再存取管理介面；公司 IP 若變更，改 `cloudbuild.yaml` 的 `ADMIN_ALLOWED_IPS` 再部署，`GET /api/ip` 可確認目前的 IP
 
 - [ ] Phase 18 follow-up — 密碼只有一組且不會過期；要換就到 Secret Manager 加新版本再重新部署。若要「寄 OTP 到信箱」的動態密碼，需要接一個寄信服務
 - [ ] Phase 18 follow-up — bot 攔截只看 UA 與 session 數，偽裝成瀏覽器的腳本仍可達到每 IP 100 session × 60 次；若看到儀錶板異常，下一步是加 Cloudflare Turnstile 或 reCAPTCHA
