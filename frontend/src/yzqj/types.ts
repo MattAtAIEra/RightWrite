@@ -28,6 +28,8 @@ export interface ResultEntry {
   detail?: string;
   /** 辨識超過時間，這題算錯 */
   timed_out?: boolean;
+  /** 今日免費額度用完，這題算錯 */
+  quota_exceeded?: boolean;
   is_correct: boolean;
   recognized: string;
   answer_ms: number;
@@ -73,6 +75,8 @@ export interface Snapshot {
     nickname: string;
     answers: AnswerRecord[];
     correct_count: number;
+    /** 今天還可以辨識幾次（每個瀏覽器 session 的免費額度） */
+    yz_remaining?: number;
   };
 }
 
@@ -176,7 +180,6 @@ export interface IdiomsResponse {
   idioms: IdiomEntry[];
   builtin_count: number;
   custom_count: number;
-  auth_required: boolean;
 }
 
 export interface YzqjMeta {

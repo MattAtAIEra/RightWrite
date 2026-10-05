@@ -49,27 +49,18 @@ export function socketUrl(code: string, params: Record<string, string>): string 
   return `${proto}://${window.location.host}/ws/yzqj/${encodeURIComponent(code)}?${query}`;
 }
 
-// ----- 後台 -----
+// ----- 後台（登入狀態在 cookie，由 /admin 管理介面負責） -----
 
-export async function fetchAdminStatus(): Promise<{ auth_required: boolean }> {
-  const res = await fetch(`${API_BASE}/api/yzqj/admin/status`);
-  if (!res.ok) throw new Error("無法連到後台");
-  return res.json();
-}
-
-export async function fetchAdminGames(token: string): Promise<AdminGamesResponse> {
-  const res = await fetch(`${API_BASE}/api/yzqj/admin/games?limit=200`, {
-    headers: token ? { "X-Admin-Token": token } : {},
-  });
-  if (res.status === 401) throw new Error("後台密碼錯誤");
+export async function fetchAdminGames(): Promise<AdminGamesResponse> {
+  const res = await fetch(`${API_BASE}/api/yzqj/admin/games?limit=200`);
+  if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok) throw new Error(await readError(res, "讀取失敗"));
   return res.json();
 }
 
-export async function fetchAdminGame(token: string, code: string): Promise<AdminGame> {
-  const res = await fetch(`${API_BASE}/api/yzqj/admin/games/${encodeURIComponent(code)}`, {
-    headers: token ? { "X-Admin-Token": token } : {},
-  });
+export async function fetchAdminGame(code: string): Promise<AdminGame> {
+  const res = await fetch(`${API_BASE}/api/yzqj/admin/games/${encodeURIComponent(code)}`);
+  if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok) throw new Error(await readError(res, "讀取失敗"));
   return res.json();
 }
@@ -86,29 +77,24 @@ export async function fetchMeta(): Promise<YzqjMeta> {
 
 export async function fetchIdioms(): Promise<IdiomsResponse> {
   const res = await fetch(`${API_BASE}/api/yzqj/idioms`);
+  if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok) throw new Error(await readError(res, "讀取成語題庫失敗"));
   return res.json();
 }
 
-export async function addIdiom(
-  token: string,
-  body: { idiom: string; wrong: { pos: number; char: string }[]; meaning: string }
-): Promise<IdiomEntry> {
+export async function addIdiom(body: { idiom: string; wrong: { pos: number; char: string }[]; meaning: string }): Promise<IdiomEntry> {
   const res = await fetch(`${API_BASE}/api/yzqj/idioms`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}) },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (res.status === 401) throw new Error("後台密碼錯誤");
+  if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok) throw new Error(await readError(res, "新增失敗"));
   return res.json();
 }
 
-export async function deleteIdiom(token: string, idiom: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/yzqj/idioms/${encodeURIComponent(idiom)}`, {
-    method: "DELETE",
-    headers: token ? { "X-Admin-Token": token } : {},
-  });
-  if (res.status === 401) throw new Error("後台密碼錯誤");
+export async function deleteIdiom(idiom: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/yzqj/idioms/${encodeURIComponent(idiom)}`, { method: "DELETE" });
+  if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok && res.status !== 204) throw new Error(await readError(res, "刪除失敗"));
 }

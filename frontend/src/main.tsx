@@ -4,14 +4,19 @@ import "./index.css";
 import App from "./App.tsx";
 import Portal from "./portal/Portal.tsx";
 import YzqjApp from "./yzqj/YzqjApp.tsx";
+import AdminApp from "./admin/AdminApp.tsx";
 
 /**
  * 依照網址決定要載入哪一個應用：
  *   /               國語學習樂園（入口）
  *   /rightwrite     改錯字神器
  *   /yzqj, /g/:code 一字千金
+ *   /admin          管理介面（要登入）
  */
 function pickApp(pathname: string): { name: string; element: React.ReactNode } {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return { name: "admin", element: <AdminApp /> };
+  }
   if (pathname.startsWith("/yzqj") || pathname.startsWith("/g/")) {
     return { name: "yzqj", element: <YzqjApp /> };
   }

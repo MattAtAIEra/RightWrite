@@ -4,7 +4,8 @@
 
 - `/` **國語學習樂園** — 入口 portal，連到下面兩個應用
 - `/rightwrite` **改錯字神器** — 單人改錯字練習（康軒版 114 學年度第 2 學期等）
-- `/yzqj`、`/g/{code}` **一字千金** — 多人即時成語改錯競賽（QR Code 加入、九宮格手寫、筆跡實況轉播、排名、成績後台）。細節見 `README-yzqj.md`
+- `/yzqj`、`/g/{code}` **一字千金** — 多人即時成語改錯競賽（QR Code 加入、九宮格手寫、筆跡實況轉播、排名）。細節見 `README-yzqj.md`
+- `/admin` **管理介面**（要登入）— 使用量儀錶板、成語題庫、成績後台、生字庫
 
 ## Development Commands
 
@@ -48,10 +49,18 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 - `GET /api/yzqj/games/{code}` / `POST .../join` — game info / join with nickname (records IP, max 10)
 - `WS /ws/yzqj/{code}?role=host&token=…` / `?role=player&player_id=…` — snapshots, stroke relay, submit
 - `GET /api/yzqj/admin/games` — results backoffice (header `X-Admin-Token` when `YZQJ_ADMIN_TOKEN` is set)
-- `GET/POST/DELETE /api/yzqj/idioms` — idiom bank (built-in + custom JSON at `YZQJ_IDIOMS_PATH`); write needs admin token
-- `POST /api/yzqj/admin/recognize` — try the strict handwriting verdict on one image (debug)
+- `GET/POST/DELETE /api/yzqj/idioms` — idiom bank (built-in + custom JSON at `YZQJ_IDIOMS_PATH`); admin only
+- `POST /api/yzqj/admin/recognize` — try the strict handwriting verdict on one image (debug; admin only)
 
-**Frontend routing**: `frontend/src/main.tsx` picks the app by pathname (portal / rightwrite / yzqj);
+**Admin endpoints** (backend/main.py, auth in `backend/auth.py`):
+- `POST /api/admin/login` {email, password} → HttpOnly cookie `rw_admin` (12h, HMAC-signed); `POST /api/admin/logout`; `GET /api/admin/me`
+- `GET /api/admin/usage?days=30` — daily recognitions / sessions / quota & bot blocks + today's top sessions
+- `GET /api/admin/vocab?grade_id=` — every lesson's characters with `similar_wrong` and examples
+- Every admin route uses `Depends(auth.require_admin)`: cookie session, or header `X-Admin-Token: <ADMIN_PASSWORD>` for scripts. With no `ADMIN_PASSWORD` set, admin routes always 401.
+
+**Abuse control** (`backend/usage.py`): costly endpoints (`/api/recognize`, yzqj create/join + grading) require a signed browser session cookie `rw_sid` (issued on demand, max `SESSION_CREATE_LIMIT_PER_IP`=100 new sessions per IP per day), reject bot User-Agents (403), and enforce daily quotas per session: `RW_DAILY_LIMIT`=60 recognitions for 改錯字神器, `YZ_DAILY_LIMIT`=50 for 一字千金 (429 / result `engine=quota` with message 「今日使用已經達到免費額度的上限」). Daily stats persist as `USAGE_DIR/<YYYY-MM-DD>.json` (Taipei dates; `/data/usage` on Cloud Run).
+
+**Frontend routing**: `frontend/src/main.tsx` picks the app by pathname (portal / rightwrite / yzqj / admin);
 一字千金 has its own tiny history-API router in `src/yzqj/router.ts`.
 
 **Dev proxy**: Vite proxies `/api` and `/ws` to `localhost:8000`. In production, both served from same origin on :8080.
@@ -74,6 +83,8 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 
 **Environment variables**:
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
+- `ADMIN_EMAIL` (default matt.jiang@gmail.com) / `ADMIN_PASSWORD` (Secret Manager `rightwrite-admin-password`) / `ADMIN_SESSION_SECRET` (Secret Manager `rightwrite-session-secret`) — admin login
+- `RW_DAILY_LIMIT` (60) / `YZ_DAILY_LIMIT` (50) / `SESSION_CREATE_LIMIT_PER_IP` (100) / `USAGE_DIR` — quotas and usage stats
 - `YZQJ_ADMIN_TOKEN` — password for the 一字千金 results backoffice (unset = open)
 - `YZQJ_DB_PATH` — SQLite path for game results (default `backend/data/yzqj.sqlite3`)
 - `YZQJ_QUESTION_SECONDS` (default 18) / `YZQJ_REVEAL_SECONDS` / `YZQJ_GRACE_SECONDS` — timing overrides (tests use short values)

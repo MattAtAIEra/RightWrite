@@ -19,7 +19,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ["YZQJ_QUESTION_SECONDS"] = "1.0"
 os.environ["YZQJ_REVEAL_SECONDS"] = "0.2"
 os.environ["YZQJ_GRACE_SECONDS"] = "0.5"
-os.environ["YZQJ_ADMIN_TOKEN"] = "secret-token"
+os.environ["ADMIN_PASSWORD"] = "secret-token"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -147,10 +147,9 @@ def test_distractors_include_question_wrong_char_and_similar_chars():
 
 
 def test_idiom_api_list_add_validate_delete(client):
-    before = client.get("/api/yzqj/idioms").json()
+    before = client.get("/api/yzqj/idioms", headers=HEADERS).json()
     assert before["builtin_count"] == len(idioms_data.IDIOMS) and before["custom_count"] == 0
-    assert before["auth_required"] is True
-
+    
     builtin = {i["idiom"] for i in idioms_data.IDIOMS}
     candidates = [("鵬程萬里", 3, "裡"), ("聞雞起舞", 3, "武"), ("水滴石穿", 3, "川"), ("守望相助", 3, "住")]
     fresh = [c for c in candidates if c[0] not in builtin]
@@ -163,7 +162,7 @@ def test_idiom_api_list_add_validate_delete(client):
     assert r.status_code == 201, r.json()
     assert r.json()["source"] == "custom"
 
-    after = client.get("/api/yzqj/idioms").json()
+    after = client.get("/api/yzqj/idioms", headers=HEADERS).json()
     assert after["custom_count"] == 1 and after["idioms"][-1]["idiom"] == new_idiom
     assert client.get("/api/yzqj/meta").json()["idiom_count"] == len(idioms_data.IDIOMS) + 1
 
@@ -192,7 +191,7 @@ def test_idiom_api_list_add_validate_delete(client):
     assert client.delete(f"/api/yzqj/idioms/{some_builtin['idiom']}", headers=HEADERS).status_code == 400
     assert client.delete(f"/api/yzqj/idioms/{new_idiom}", headers=HEADERS).status_code == 204
     assert client.delete(f"/api/yzqj/idioms/{new_idiom}", headers=HEADERS).status_code == 404
-    assert client.get("/api/yzqj/idioms").json()["custom_count"] == 0
+    assert client.get("/api/yzqj/idioms", headers=HEADERS).json()["custom_count"] == 0
 
 
 def test_admin_recognize_endpoint_fallback(client):

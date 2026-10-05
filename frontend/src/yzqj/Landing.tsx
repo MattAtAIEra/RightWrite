@@ -95,8 +95,6 @@ export default function Landing() {
 
       <footer className="yz-footer">
         <a href="/">← 回學習樂園</a>
-        <a href="/yzqj/idioms">成語題庫</a>
-        <a href="/yzqj/admin">成績後台</a>
       </footer>
     </div>
   );

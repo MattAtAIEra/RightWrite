@@ -200,6 +200,8 @@ export default function HostView({ code }: Props) {
                     {result ? (
                       result.is_correct ? (
                         <span>✓ 答對 · {formatSeconds(result.answer_ms)}</span>
+                      ) : result.quota_exceeded ? (
+                        <span title={result.detail}>✗ 免費額度用完</span>
                       ) : result.timed_out ? (
                         <span title={result.detail}>✗ 辨識逾時</span>
                       ) : result.submitted ? (

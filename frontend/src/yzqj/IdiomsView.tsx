@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { addIdiom, deleteIdiom, fetchIdioms } from "./api";
 import type { IdiomEntry, IdiomsResponse } from "./types";
 
-const TOKEN_KEY = "yzqj_admin_token";
-
 /** 把成語裡第 pos 個字換成錯字，給清單顯示「題目會長什麼樣」 */
 function withWrong(idiom: string, pos: number, char: string): string[] {
   return Array.from(idiom).map((c, i) => (i === pos ? char : c));
@@ -17,7 +15,6 @@ export default function IdiomsView() {
   const [data, setData] = useState<IdiomsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) ?? "");
 
   // 新增表單
   const [idiom, setIdiom] = useState("");
@@ -60,12 +57,11 @@ export default function IdiomsView() {
     setFormError(null);
     setNotice(null);
     try {
-      const created = await addIdiom(token, {
+      const created = await addIdiom({
         idiom: idiom.trim(),
         wrong: [{ pos, char: wrongChar.trim() }],
         meaning: meaning.trim(),
       });
-      sessionStorage.setItem(TOKEN_KEY, token);
       setData((prev) => (prev ? { ...prev, idioms: [...prev.idioms, created], custom_count: prev.custom_count + 1 } : prev));
       setNotice(`已新增「${created.idiom}」，下一場就會出現在題目裡。`);
       setIdiom("");
@@ -82,8 +78,7 @@ export default function IdiomsView() {
   const handleDelete = async (entry: IdiomEntry) => {
     if (!confirm(`要刪除自訂成語「${entry.idiom}」嗎？`)) return;
     try {
-      await deleteIdiom(token, entry.idiom);
-      sessionStorage.setItem(TOKEN_KEY, token);
+      await deleteIdiom(entry.idiom);
       setData((prev) =>
         prev ? { ...prev, idioms: prev.idioms.filter((i) => i.idiom !== entry.idiom), custom_count: prev.custom_count - 1 } : prev
       );
@@ -103,10 +98,6 @@ export default function IdiomsView() {
               ? `目前共 ${data.idioms.length} 個成語：內建 ${data.builtin_count} 個、自訂 ${data.custom_count} 個。每一題會把其中一個字換成錯字，學生要寫出正確的那個字。`
               : "載入中…"}
           </p>
-        </div>
-        <div className="yz-admin-links">
-          <a href="/yzqj/admin" className="yz-btn ghost">成績後台</a>
-          <a href="/yzqj" className="yz-btn ghost">回一字千金</a>
         </div>
       </header>
 
@@ -149,12 +140,6 @@ export default function IdiomsView() {
             解釋（公布答案時顯示，可留空）
             <input value={meaning} onChange={(e) => setMeaning(e.target.value.slice(0, 60))} placeholder="例如：鄰居互相照顧、幫忙。" />
           </label>
-          {data?.auth_required && (
-            <label>
-              後台密碼
-              <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="後台密碼" autoComplete="current-password" />
-            </label>
-          )}
           {chars.length === 4 && Array.from(wrongChar).length === 1 && (
             <div className="yz-idiom-preview">
               題目會顯示：

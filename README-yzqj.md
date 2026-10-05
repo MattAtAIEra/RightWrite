@@ -12,8 +12,9 @@
 | `/yzqj` | 一字千金首頁：老師建立賽局／學生輸入代碼 |
 | `/yzqj/host/{code}` | 老師監看畫面（只能在建立賽局的那個瀏覽器開啟） |
 | `/g/{code}` | 學生加入與作答，QR Code 指到這裡 |
-| `/yzqj/admin` | 成績後台：每場賽局的參加者、IP、各題結果、排名 |
-| `/yzqj/idioms` | 成語題庫：看全部成語（內建＋自訂）、新增／刪除自訂成語 |
+| `/admin/results` | 成績後台（要登入）：每場賽局的參加者、IP、各題結果、排名 |
+| `/admin/idioms` | 成語題庫（要登入）：看全部成語（內建＋自訂）、新增／刪除自訂成語 |
+| `/admin/usage` | 使用量儀錶板（要登入）：每天的辨識次數、session 數、額度與 bot 擋下次數 |
 
 ## 流程
 
@@ -40,7 +41,7 @@
 4. Gemini 失敗時退到 Google Cloud Vision 自由辨識（需要 `GOOGLE_APPLICATION_CREDENTIALS` 或跑在 Cloud Run 上）；
    兩者都沒設定時進入「備援模式」：只要有筆跡就算答對（信心值 0.5），空白視為答錯。後台各題結果滑鼠移上去會顯示判定細節。
 
-後台可以用 `POST /api/yzqj/admin/recognize`（body：`image_data`、`expected_char`、可選 `distractors`）丟一張圖試跑判定。
+管理員可以用 `POST /api/yzqj/admin/recognize`（登入後，或 header `X-Admin-Token` 帶管理密碼）（body：`image_data`、`expected_char`、可選 `distractors`）丟一張圖試跑判定。
 
 ## 出題
 
@@ -53,7 +54,8 @@
 
 | 變數 | 預設 | 說明 |
 |---|---|---|
-| `YZQJ_ADMIN_TOKEN` | （空，不驗證） | 設定後，成績後台與新增／刪除成語都要帶這組密碼 |
+| `ADMIN_EMAIL`、`ADMIN_PASSWORD` | （沒設就全部拒絕） | 管理介面 `/admin` 的帳號密碼；密碼放 Secret Manager `rightwrite-admin-password` |
+| `YZ_DAILY_LIMIT` | `50` | 每個瀏覽器 session 一天最多幾次辨識，超過該題算錯並顯示「今日使用已經達到免費額度的上限」 |
 | `YZQJ_DB_PATH` | `backend/data/yzqj.sqlite3` | 成績與出題紀錄資料庫位置 |
 | `YZQJ_IDIOMS_PATH` | `backend/data/custom_idioms.json` | 自訂成語 JSON（線上掛在 Cloud Storage volume 的 `/data`） |
 | `YZQJ_QUESTION_SECONDS` | `18` | 每題秒數 |

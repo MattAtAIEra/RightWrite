@@ -23,9 +23,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+import auth
+import usage
 import yzqj_store as store
 import idioms_data
 from idioms_data import all_idioms, distractors_for, pick_questions
@@ -87,6 +89,7 @@ class Player:
     joined_at: float
     socket: WebSocket | None = None
     answers: list[dict] = field(default_factory=list)
+    session_id: str = ""  # 瀏覽器 session（每日辨識額度算在它頭上）
 
     @property
     def connected(self) -> bool:
@@ -153,7 +156,7 @@ class Game:
             n += 1
         return candidate
 
-    def add_player(self, nickname: str, ip: str, user_agent: str) -> Player:
+    def add_player(self, nickname: str, ip: str, user_agent: str, session_id: str = "") -> Player:
         if not self.can_join:
             raise HTTPException(status_code=409, detail="賽局已開始或人數已滿")
         player = Player(
@@ -162,6 +165,7 @@ class Game:
             ip=ip,
             user_agent=user_agent[:300],
             joined_at=time.time(),
+            session_id=session_id,
         )
         self.players[player.id] = player
         self.touch()
@@ -281,6 +285,17 @@ class Game:
                     "engine": "none",
                     "submitted": False,
                 }
+            if not usage.STORE.try_consume("yz", player.session_id or player.id, player.ip):
+                return player.id, {
+                    "is_correct": False,
+                    "recognized": "",
+                    "answer_ms": max(0, min(limit_ms, int((sub.submitted_at - started) * 1000))),
+                    "engine": "quota",
+                    "detail": usage.QUOTA_MESSAGE,
+                    "timed_out": False,
+                    "quota_exceeded": True,
+                    "submitted": True,
+                }
             timeout = recognize_timeout()
             try:
                 rec = await asyncio.wait_for(
@@ -308,6 +323,7 @@ class Game:
                 "engine": rec.engine,
                 "detail": rec.detail,
                 "timed_out": rec.engine == "timeout",
+                "quota_exceeded": False,
                 "submitted": True,
             }
 
@@ -430,6 +446,7 @@ class Game:
                 "nickname": me.nickname,
                 "answers": me.answers,
                 "correct_count": me.correct_count,
+                "yz_remaining": usage.STORE.remaining("yz", me.session_id or me.id),
             }
         return data
 
@@ -540,7 +557,8 @@ class JoinRequest(BaseModel):
 
 
 @router.post("/games")
-async def create_game(request: Request):
+async def create_game(request: Request, response: Response):
+    usage.ensure_session(request, response)
     _sweep_games()
     code = _new_code()
     game = Game(code=code, host_token=secrets.token_urlsafe(16), host_ip=client_ip(request.headers, request.client))
@@ -571,12 +589,16 @@ def game_info(code: str):
 
 
 @router.post("/games/{code}/join")
-async def join_game(code: str, req: JoinRequest, request: Request):
+async def join_game(code: str, req: JoinRequest, request: Request, response: Response):
     game = get_game_or_404(code)
+    sid = usage.ensure_session(request, response)
+    if usage.STORE.remaining("yz", sid) <= 0:
+        raise HTTPException(status_code=429, detail=usage.QUOTA_MESSAGE)
     player = game.add_player(
         nickname=req.nickname,
         ip=client_ip(request.headers, request.client),
         user_agent=request.headers.get("user-agent", ""),
+        session_id=sid,
     )
     # 讓已經連線的人（老師、其他學生）立刻看到新成員
     asyncio.create_task(game.broadcast())
@@ -618,25 +640,19 @@ def _idiom_view(item: dict) -> dict:
 
 
 @router.get("/idioms")
-def list_idioms():
-    """成語題庫清單：內建在前、自訂在後。任何人都可以看。"""
+def list_idioms(admin: str = Depends(auth.require_admin)):
+    """成語題庫清單：內建在前、自訂在後。只有管理員看得到。"""
     items = [_idiom_view(i) for i in all_idioms()]
     return {
         "idioms": items,
         "builtin_count": sum(1 for i in items if i["source"] == "builtin"),
         "custom_count": sum(1 for i in items if i["source"] == "custom"),
-        "auth_required": bool(os.environ.get("YZQJ_ADMIN_TOKEN", "")),
     }
 
 
 @router.post("/idioms", status_code=201)
-def create_idiom(
-    req: IdiomCreate,
-    x_admin_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-):
-    """新增自訂成語（有設後台密碼時要帶）。"""
-    _check_admin(x_admin_token, token)
+def create_idiom(req: IdiomCreate, admin: str = Depends(auth.require_admin)):
+    """新增自訂成語（管理員）。"""
     try:
         item = idioms_data.add_custom(req.model_dump())
     except ValueError as exc:
@@ -645,13 +661,8 @@ def create_idiom(
 
 
 @router.delete("/idioms/{idiom}", status_code=204)
-def delete_idiom(
-    idiom: str,
-    x_admin_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-):
+def delete_idiom(idiom: str, admin: str = Depends(auth.require_admin)):
     """刪除自訂成語；內建的不能刪。"""
-    _check_admin(x_admin_token, token)
     if any(i["idiom"] == idiom for i in idioms_data.IDIOMS):
         raise HTTPException(status_code=400, detail="內建成語不能刪除")
     if not idioms_data.remove_custom(idiom):
@@ -662,27 +673,8 @@ def delete_idiom(
 # ----- 後台 ---------------------------------------------------------------
 
 
-def _check_admin(x_admin_token: str | None, token: str | None) -> None:
-    required = os.environ.get("YZQJ_ADMIN_TOKEN", "")
-    if not required:
-        return
-    supplied = x_admin_token or token or ""
-    if not secrets.compare_digest(supplied, required):
-        raise HTTPException(status_code=401, detail="後台密碼錯誤")
-
-
-@router.get("/admin/status")
-def admin_status():
-    return {"auth_required": bool(os.environ.get("YZQJ_ADMIN_TOKEN", ""))}
-
-
 @router.get("/admin/games")
-def admin_games(
-    limit: int = Query(100, ge=1, le=500),
-    x_admin_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-):
-    _check_admin(x_admin_token, token)
+def admin_games(limit: int = Query(100, ge=1, le=500), admin: str = Depends(auth.require_admin)):
     games = store.list_games(limit)
     for g in games:
         g["live"] = g["code"] in GAMES
@@ -697,13 +689,8 @@ class RecognizeDebugRequest(BaseModel):
 
 
 @router.post("/admin/recognize")
-async def admin_recognize(
-    req: RecognizeDebugRequest,
-    x_admin_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-):
+async def admin_recognize(req: RecognizeDebugRequest, admin: str = Depends(auth.require_admin)):
     """後台用：拿一張九宮格手寫圖試跑一字千金的辨識判定，看潦草字會不會被放過。"""
-    _check_admin(x_admin_token, token)
     timeout = recognize_timeout()
     distractors = req.distractors or distractors_for(
         {"correct_char": req.expected_char, "wrong_char": req.expected_char}
@@ -731,12 +718,7 @@ async def admin_recognize(
 
 
 @router.get("/admin/games/{code}")
-def admin_game(
-    code: str,
-    x_admin_token: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-):
-    _check_admin(x_admin_token, token)
+def admin_game(code: str, admin: str = Depends(auth.require_admin)):
     game = store.get_game(code.upper())
     if not game:
         raise HTTPException(status_code=404, detail="找不到這個賽局")

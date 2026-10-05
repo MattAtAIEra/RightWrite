@@ -21,7 +21,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ["YZQJ_QUESTION_SECONDS"] = "1.0"
 os.environ["YZQJ_REVEAL_SECONDS"] = "0.2"
 os.environ["YZQJ_GRACE_SECONDS"] = "0.5"
-os.environ["YZQJ_ADMIN_TOKEN"] = "secret-token"
+os.environ["ADMIN_PASSWORD"] = "secret-token"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

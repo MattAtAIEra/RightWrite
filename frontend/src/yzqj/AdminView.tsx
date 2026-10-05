@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchAdminGames, fetchAdminStatus } from "./api";
+import { fetchAdminGames } from "./api";
 import type { AdminGame, AdminGamesResponse } from "./types";
 import { formatSeconds } from "./format";
-
-const TOKEN_KEY = "yzqj_admin_token";
 
 function fmtTime(ts: number | null): string {
   if (!ts) return "—";
@@ -18,26 +16,16 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function AdminView() {
-  const [authRequired, setAuthRequired] = useState<boolean | null>(null);
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) ?? "");
   const [data, setData] = useState<AdminGamesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAdminStatus()
-      .then((s) => setAuthRequired(s.auth_required))
-      .catch(() => setAuthRequired(false));
-  }, []);
-
-  const load = useCallback(async (tok: string) => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAdminGames(tok);
-      setData(res);
-      sessionStorage.setItem(TOKEN_KEY, tok);
+      setData(await fetchAdminGames());
     } catch (e) {
       setData(null);
       setError(e instanceof Error ? e.message : "讀取失敗");
@@ -47,11 +35,8 @@ export default function AdminView() {
   }, []);
 
   useEffect(() => {
-    if (authRequired === null) return;
-    if (!authRequired || token) void load(token);
-  }, [authRequired, load]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (authRequired === null) return <div className="yz-loader">載入中…</div>;
+    void load();
+  }, [load]);
 
   return (
     <div className="yz-admin">
@@ -60,32 +45,7 @@ export default function AdminView() {
           <h1>一字千金 · 成績後台</h1>
           <p className="yz-hint">每一場賽局的參加者、IP、答題結果與排名。</p>
         </div>
-        <div className="yz-admin-links">
-          <a href="/yzqj/idioms" className="yz-btn ghost">成語題庫</a>
-          <a href="/yzqj" className="yz-btn ghost">回一字千金</a>
-        </div>
       </header>
-
-      {authRequired && (
-        <form
-          className="yz-admin-auth"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void load(token);
-          }}
-        >
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="後台密碼"
-            aria-label="後台密碼"
-          />
-          <button type="submit" className="yz-btn primary" disabled={loading}>
-            {loading ? "讀取中…" : "查詢"}
-          </button>
-        </form>
-      )}
 
       {error && <div className="yz-error">{error}</div>}
 
@@ -96,7 +56,7 @@ export default function AdminView() {
             <div><b>{data.stats.finished_games}</b><span>場已結束</span></div>
             <div><b>{data.stats.players}</b><span>人次參加</span></div>
             <div><b>{data.live_games}</b><span>場在記憶體中</span></div>
-            <button type="button" className="yz-btn ghost" onClick={() => void load(token)} disabled={loading}>重新整理</button>
+            <button type="button" className="yz-btn ghost" onClick={() => void load()} disabled={loading}>重新整理</button>
           </div>
 
           {data.games.length === 0 && <p className="yz-hint">還沒有任何賽局紀錄。</p>}
@@ -160,7 +120,7 @@ function GameRow({ game, open, onToggle }: { game: AdminGame; open: boolean; onT
                               <span
                                 key={a.index}
                                 className={a.is_correct ? "ok" : "ng"}
-                                title={`${a.display} → ${a.idiom}；辨識為「${a.recognized || "（空白）"}」；${a.engine === "vision" ? "Vision 辨識" : a.engine === "fallback" ? "備援模式" : "未作答"}`}
+                                title={`${a.display} → ${a.idiom}；辨識為「${a.recognized || "（空白）"}」；${a.engine === "gemini" ? "Gemini 嚴格判定" : a.engine === "vision" ? "Vision 辨識" : a.engine === "fallback" ? "備援模式" : a.engine === "timeout" ? "辨識逾時" : a.engine === "quota" ? "額度用完" : "未作答"}${a.detail ? "；" + a.detail : ""}`}
                               >
                                 {a.correct_char}
                                 {a.is_correct ? "✓" : "✗"}

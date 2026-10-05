@@ -29,7 +29,7 @@ steps:
       - "--port"
       - "8080"
       - "--set-secrets"
-      - "GEMINI_API_KEY=gemini-api-key:latest"
+      - "GEMINI_API_KEY=gemini-api-key:latest,ADMIN_PASSWORD=rightwrite-admin-password:latest,ADMIN_SESSION_SECRET=rightwrite-session-secret:latest"
       # 自訂成語存在 Cloud Storage bucket 掛載的 /data，實例重啟不會消失（gen2 才支援 volume）
       - "--execution-environment"
       - "gen2"
@@ -38,6 +38,6 @@ steps:
       - "--add-volume-mount"
       - "volume=data,mount-path=/data"
       - "--set-env-vars"
-      - "YZQJ_IDIOMS_PATH=/data/custom_idioms.json"
+      - "YZQJ_IDIOMS_PATH=/data/custom_idioms.json,USAGE_DIR=/data/usage,ADMIN_EMAIL=matt.jiang@gmail.com"
 images:
   - "gcr.io/$PROJECT_ID/rightwrite"

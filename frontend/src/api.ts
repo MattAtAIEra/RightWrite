@@ -2,6 +2,26 @@ import type { LessonsResponse, ArticleResponse, RecognizeResponse, GradesRespons
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+/** 今日免費額度用完（HTTP 429）或被判定為自動化程式（403）時丟出，訊息直接給畫面顯示 */
+export class QuotaError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "QuotaError";
+    this.status = status;
+  }
+}
+
+async function readDetail(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body && typeof body.detail === "string") return body.detail;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
 export async function fetchGrades(): Promise<GradesResponse> {
   const res = await fetch(`${API_BASE}/api/grades`);
   if (!res.ok) throw new Error("Failed to fetch grades");
@@ -54,6 +74,9 @@ export async function recognizeHandwriting(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image_data: imageData, expected_char: expectedChar }),
   });
+  if (res.status === 429 || res.status === 403) {
+    throw new QuotaError(await readDetail(res, "今日使用已經達到免費額度的上限"), res.status);
+  }
   if (!res.ok) throw new Error("Failed to recognize");
   return res.json();
 }

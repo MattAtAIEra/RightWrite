@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { AnswerResult } from "./ArticlePractice";
-import { recognizeHandwriting } from "../api";
+import { recognizeHandwriting, QuotaError } from "../api";
 import StampSeal from "../rewards/StampSeal";
 import { STAMP_LABELS, type StampAward } from "../rewards/types";
 
@@ -140,7 +140,7 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
       const res = await recognizeHandwriting(imageData, correctChar);
       setVerifyResult({ correct: res.is_correct, recognized: res.recognized_char });
     } catch (err) {
-      setVerifyResult({ correct: false, recognized: "?" });
+      setVerifyResult({ correct: false, recognized: err instanceof QuotaError ? "__limit__" : "?" });
     } finally {
       setVerifying(false);
     }
@@ -176,9 +176,11 @@ function CorrectionCanvas({ correctChar, onClose }: { correctChar: string; onClo
       </div>
       {verifyResult && (
         <div className={`correction-feedback ${verifyResult.correct ? "ok" : "no"}`}>
-          {verifyResult.correct
-            ? "🎉 太棒了，寫對了！"
-            : "再試一次！記得工整書寫喔～"}
+          {verifyResult.recognized === "__limit__"
+            ? "🚫 今日使用已經達到免費額度的上限，明天再來練習吧！"
+            : verifyResult.correct
+              ? "🎉 太棒了，寫對了！"
+              : "再試一次！記得工整書寫喔～"}
         </div>
       )}
     </div>

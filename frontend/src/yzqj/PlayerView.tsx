@@ -243,6 +243,9 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
           <div className="yz-wait-tip">
             <b>怎麼玩？</b> 螢幕會出現一個藏著錯字的成語，請在九宮格裡寫出<b>正確的那個字</b>，每題 {snap.question_seconds} 秒。
           </div>
+          {snap.you?.yz_remaining != null && snap.you.yz_remaining < 10 && (
+            <p className="yz-hint">今天剩下 {snap.you.yz_remaining} 次免費辨識額度。</p>
+          )}
         </section>
       )}
 
@@ -294,6 +297,8 @@ function PlayerGame({ code, me, onLeave }: GameProps) {
           <div className={`yz-result-banner ${myResult?.is_correct ? "good" : "bad"}`}>
             {myResult?.is_correct ? (
               <>🎉 答對了！</>
+            ) : myResult?.quota_exceeded ? (
+              <>🚫 今日使用已經達到免費額度的上限，這題算答錯</>
             ) : myResult?.timed_out ? (
               <>⏱ 辨識超過 {snap.recognize_timeout} 秒，這題算答錯</>
             ) : myResult?.submitted ? (

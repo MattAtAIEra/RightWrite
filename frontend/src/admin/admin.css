@@ -1,0 +1,147 @@
+/* 管理介面：沿用一字千金的變數與 .yz-* 元件，只補自己的版面 */
+
+.ad-root { min-height: 100dvh; display: flex; flex-direction: column; }
+
+.ad-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(45, 52, 54, 0.06);
+  flex-wrap: wrap;
+}
+.ad-brand { font-weight: 800; font-size: 1.1rem; cursor: pointer; white-space: nowrap; }
+.ad-tabs { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+.ad-tab {
+  font-family: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ad-tab.active { background: var(--bg); color: var(--text); border-color: var(--border); }
+.ad-user { display: flex; align-items: center; gap: 10px; color: var(--text-light); font-size: 0.92rem; }
+.ad-main { flex: 1; max-width: 1200px; width: 100%; margin: 0 auto; padding: 20px 16px 60px; }
+.ad-main .yz-admin, .ad-main .yz-idioms { padding-left: 0; padding-right: 0; }
+
+/* 登入 */
+.ad-login { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.ad-login-card {
+  width: min(420px, 100%);
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 28px 28px 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ad-login-card h1 { margin: 0; font-size: 1.4rem; }
+.ad-login-card label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.ad-login-card input {
+  font-family: inherit;
+  font-size: 1.05rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+}
+.ad-login-card input:focus { outline: none; border-color: var(--secondary); }
+.ad-back { text-align: center; color: var(--text-light); font-size: 0.92rem; }
+
+/* 共用 */
+.ad-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+  margin-top: 18px;
+}
+.ad-card h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.ad-select {
+  font-family: inherit;
+  font-size: 0.98rem;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+}
+.ad-table td, .ad-table th { white-space: nowrap; }
+.ad-table tr.is-empty td { color: var(--text-light); }
+
+/* 儀錶板 */
+.ad-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 16px; }
+.ad-tile {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 2px solid transparent;
+}
+.ad-tile.warn { border-color: var(--warning); }
+.ad-tile-label { font-size: 0.85rem; color: var(--text-light); }
+.ad-tile-value { font-size: 2rem; line-height: 1.1; }
+.ad-tile-sub { font-size: 0.82rem; color: var(--text-light); }
+.ad-chart svg { width: 100%; height: auto; display: block; }
+.ad-grid { stroke: var(--border); stroke-width: 1; }
+.ad-axis { font-size: 11px; fill: var(--text-light); }
+.ad-bar-rw { fill: var(--secondary); }
+.ad-bar-yz { fill: var(--primary); }
+.ad-legend { display: flex; gap: 18px; font-size: 0.88rem; color: var(--text-light); margin-top: 6px; }
+.ad-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.ad-swatch.rw { background: var(--secondary); }
+.ad-swatch.yz { background: var(--primary); }
+
+/* 生字庫 */
+.ad-lessons { display: flex; flex-direction: column; gap: 4px; }
+.ad-lesson h2 { display: flex; align-items: baseline; gap: 10px; }
+.ad-lesson-title { font-weight: 400; color: var(--text-light); }
+.ad-lesson h2 small { margin-left: auto; font-size: 0.85rem; color: var(--text-light); font-weight: 400; }
+.ad-chars { display: flex; flex-wrap: wrap; gap: 8px; }
+.ad-char { position: relative; }
+.ad-char-btn {
+  font-family: var(--calli-font);
+  font-size: 1.6rem;
+  line-height: 1;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ad-char.open .ad-char-btn { border-color: var(--primary); background: #fff3f0; }
+.ad-char-detail {
+  position: absolute;
+  z-index: 5;
+  top: 58px;
+  left: 0;
+  min-width: 220px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+.ad-char-k { display: inline-block; min-width: 4.5em; color: var(--text-light); font-size: 0.85rem; }
+.ad-wrong { display: inline-block; font-family: var(--calli-font); font-size: 1.25rem; margin-right: 6px; color: #c92a2a; }
+
+@media (max-width: 700px) {
+  .ad-user span { display: none; }
+  .ad-tile-value { font-size: 1.6rem; }
+}

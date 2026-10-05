@@ -15,7 +15,7 @@ from typing import Sequence, TypeVar
 logger = logging.getLogger(__name__)
 
 from pypinyin import pinyin, Style
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +33,8 @@ from recognition import (
     recognize_with_gemini as _recognize_with_gemini,
     recognize_with_vision_api as _recognize_with_vision_api,
 )
+import auth
+import usage
 import yzqj
 
 
@@ -74,6 +76,16 @@ app.add_middleware(
 # 一字千金（多人即時成語改錯競賽）
 app.include_router(yzqj.router)
 app.include_router(yzqj.ws_router)
+
+
+@app.on_event("startup")
+def _start_usage_flusher() -> None:
+    usage.start_flusher()
+
+
+@app.on_event("shutdown")
+def _flush_usage() -> None:
+    usage.STORE.flush()
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -518,9 +530,11 @@ def generate_article(req: GenerateArticleRequest):
 
 
 @app.post("/api/recognize", response_model=RecognizeResponse)
-def recognize_handwriting(req: RecognizeRequest):
+def recognize_handwriting(req: RecognizeRequest, request: Request, response: Response):
     """
     Recognize handwritten character from canvas image.
+
+    每個瀏覽器 session 一天最多 RW_DAILY_LIMIT 次（預設 60），超過回 429。
 
     Primary engine is Gemini multimodal — it handles messy single-character
     handwriting from young students far better than sparse-text OCR. Google
@@ -529,6 +543,8 @@ def recognize_handwriting(req: RecognizeRequest):
     correctly written answer.
     """
     expected = req.expected_char
+    sid = usage.ensure_session(request, response)
+    usage.consume_or_429("rw", sid, request)
 
     # Primary: Gemini multimodal handwriting recognition, two-stage routing.
     # Stage 1 runs with thinking_level="low" — a fraction of the cost/latency,
@@ -591,6 +607,88 @@ def recognize_handwriting(req: RecognizeRequest):
         is_correct=False,
         confidence=0.0,
     )
+
+
+# ---------------------------------------------------------------------------
+# 管理介面：登入、使用量儀錶板、生字庫
+# ---------------------------------------------------------------------------
+
+_login_failures: dict[str, list[float]] = {}
+LOGIN_MAX_FAILURES = 8
+LOGIN_WINDOW_SECONDS = 600
+
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _too_many_login_failures(ip: str) -> bool:
+    import time as _time
+
+    now = _time.time()
+    recent = [t for t in _login_failures.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+    _login_failures[ip] = recent
+    return len(recent) >= LOGIN_MAX_FAILURES
+
+
+@app.post("/api/admin/login")
+def admin_login(req: AdminLoginRequest, request: Request, response: Response):
+    """帳號密碼登入，成功就發 12 小時的管理 cookie。同一個 IP 十分鐘內錯 8 次就暫停。"""
+    import time as _time
+
+    ip = usage.client_ip(request)
+    if _too_many_login_failures(ip):
+        raise HTTPException(status_code=429, detail="嘗試次數太多，請十分鐘後再試")
+    if not auth.login_ok(req.email, req.password):
+        _login_failures.setdefault(ip, []).append(_time.time())
+        raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
+    _login_failures.pop(ip, None)
+    auth.issue_admin_cookie(request, response, auth.admin_email())
+    return {"email": auth.admin_email()}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(response: Response):
+    auth.clear_admin_cookie(response)
+    return {"ok": True}
+
+
+@app.get("/api/admin/me")
+def admin_me(request: Request):
+    email = auth.current_admin(request)
+    if not email:
+        raise HTTPException(status_code=401, detail="尚未登入")
+    return {"email": email}
+
+
+@app.get("/api/admin/usage")
+def admin_usage(days: int = Query(30, ge=1, le=90), admin: str = Depends(auth.require_admin)):
+    """每日使用量：辨識次數、session 數、額度與 bot 擋下次數，以及今天用量最高的 session。"""
+    return usage.STORE.stats(days)
+
+
+@app.get("/api/admin/vocab")
+def admin_vocab(grade_id: str = Query("4_kangxuan"), admin: str = Depends(auth.require_admin)):
+    """生字庫：某一套課本每一課的生字、形近錯字與例詞。"""
+    info = get_grade_info(grade_id)
+    data = get_vocab_data(grade_id)
+    lessons = []
+    for num in sorted(data):
+        ldata = data[num]
+        lessons.append({
+            "lesson_number": num,
+            "title": ldata["title"],
+            "characters": [
+                {
+                    "char": c["char"],
+                    "similar_wrong": list(c.get("similar_wrong", [])),
+                    "examples": list(c.get("examples", [])),
+                }
+                for c in ldata["characters"]
+            ],
+        })
+    return {"grade_id": grade_id, "grade": info, "lessons": lessons}
 
 
 @app.post("/api/check")

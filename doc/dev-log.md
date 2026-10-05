@@ -698,7 +698,54 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 ---
 
 
+## Phase 18：管理介面登入、每日免費額度、bot 攔截、使用量儀錶板
+
+**日期**：2026-10-05
+**觸發**：用戶要求——（1）成語題庫與成績後台不可以公開，要一個管理 URI，帳號 matt.jiang@gmail.com、密碼動態產生；（2）防機器人，並對每個進線的 session 控制次數：改錯字每天最多辨識 60 字、一字千金同一個用戶最多 50 字，超過顯示「今日使用已經達到免費額度的上限」；（3）管理介面要能看每天的使用量與辨識次數統計；（4）管理介面四個功能：成語題庫、成績後台、生字庫、使用次數分佈儀錶板
+
+### 完成項目
+
+1. **管理介面 `/admin`**（`frontend/src/admin/`：`AdminApp.tsx`、`UsageView.tsx`、`VocabView.tsx`、`admin.css`、`api.ts`）
+   - 四個分頁：使用量儀錶板、成語題庫（搬過來的 `yzqj/IdiomsView`）、成績後台（搬過來的 `yzqj/AdminView`）、生字庫（新）
+   - 舊網址 `/yzqj/admin`、`/yzqj/idioms` 轉到 `/admin/...`；一字千金首頁的後台連結拿掉
+   - 生字庫：挑課本 → 每課生字 → 點一個字看常見錯字與例詞，可搜尋；資料來自新的 `GET /api/admin/vocab`
+   - 儀錶板：今天 5 張數字卡、最近 7／30／90 天的 SVG 長條圖（手刻，不用 recharts）、每天的表、今天用量最高的 session
+
+2. **登入**（`backend/auth.py`）
+   - `POST /api/admin/login`：帳號 `ADMIN_EMAIL`、密碼 `ADMIN_PASSWORD`，成功發 HMAC 簽章的 HttpOnly cookie `rw_admin`，12 小時；`/logout`、`/me`
+   - 所有管理端點用 `Depends(auth.require_admin)`：cookie 或 header `X-Admin-Token` 帶管理密碼（給腳本與測試用）；**沒設 `ADMIN_PASSWORD` 時一律 401**，忘了設密碼不會把後台開給大眾
+   - 同一個 IP 十分鐘內密碼錯 8 次就暫停登入
+   - 密碼用 `secrets` 產生 18 碼，存 Secret Manager `rightwrite-admin-password`；session 簽章用另一把 `rightwrite-session-secret`；`cloudbuild.yaml` 以 `--set-secrets` 注入，compute SA 已授權 accessor
+   - 原本的 `YZQJ_ADMIN_TOKEN` 機制移除，`list_idioms` 也改成管理員才看得到
+
+3. **防濫用與每日額度**（`backend/usage.py`）
+   - 瀏覽器 session：簽章的 cookie `rw_sid`，會花錢的端點（`/api/recognize`、一字千金建局／加入／評分）一定要有；沒有就當場發，但同一個 IP 一天最多 `SESSION_CREATE_LIMIT_PER_IP`（100）個，擋狂換 cookie 的腳本
+   - bot：User-Agent 含 bot、crawl、spider、curl、wget、python-requests、python-urllib、httpx、scrapy、HeadlessChrome 等直接 403，並計入統計
+   - 額度：改錯字 `RW_DAILY_LIMIT`=60、一字千金 `YZ_DAILY_LIMIT`=50，以台北時間計日。改錯字超過回 429；一字千金加入時額度已用完回 429，評分時用完則該題 `engine=quota`、算錯，學生端與老師端都顯示訊息
+   - 統計存 `USAGE_DIR/<日期>.json`（tmp＋replace），背景 thread 每 5 秒寫回、關機再寫一次；線上 `USAGE_DIR=/data/usage` 在 Cloud Storage volume，實例重啟不歸零
+   - 前端：`recognizeHandwriting` 遇 429／403 丟 `QuotaError`；`ArticlePractice` 原本把辨識失敗當作答對，現在額度用完改成「不給分也不扣分」並顯示紅字；`ResultView` 的重寫驗證也顯示訊息
+
+### 發現與修正
+
+- **辨識失敗被當作答對**：`ArticlePractice` 的 `.catch` 原本「Fallback: treat as correct」，額度一上線等於全部答對；改成只有非額度錯誤才走原本的寬鬆處理
+- **headless Chrome 的 UA 含 HeadlessChrome，被自己的 bot 名單擋掉**：E2E 腳本改用一般 Chrome 的 UA；名單保留，因為那是真實的爬蟲特徵
+- **Playwright 的 `page.request` 沿用 context 的 UA 與 cookie**：拿來打 429 流程剛好，同一個瀏覽器 session 連打到額度用完
+
+### 測試結果
+
+- 後端：`pytest` 49/49（新增 `tests/test_admin_quota.py` 8 項：登入流程與登出、錯 8 次鎖定、沒設密碼全擋、改錯字額度 2 次後 429、bot UA 403、同 IP session 上限、一字千金加入被擋與評分扣額度、統計端點與落檔重載）
+- 前端：`vitest` 80/80；`tsc -b`＋`vite build` 通過
+- 真實瀏覽器 E2E（本機 :8003，RW_DAILY_LIMIT=3）：公開頁沒有後台連結、舊網址轉向、沒登入 401、密碼錯誤訊息、登入後四個分頁都載入（生字庫 12 課、點字看錯字）、同一瀏覽器辨識 3 次 200 第 4 次 429 且訊息正確、儀錶板數字卡對得上、登出後 401、python-urllib 直接打 API 403
+- Build/部署：成功（Cloud Run `__REVISION__`，asia-east1，取代 00056-l4d）；線上驗證：__LIVE__
+
+---
+
+
 ## TODO
+
+- [ ] Phase 18 follow-up — 密碼只有一組且不會過期；要換就到 Secret Manager 加新版本再重新部署。若要「寄 OTP 到信箱」的動態密碼，需要接一個寄信服務
+- [ ] Phase 18 follow-up — bot 攔截只看 UA 與 session 數，偽裝成瀏覽器的腳本仍可達到每 IP 100 session × 60 次；若看到儀錶板異常，下一步是加 Cloudflare Turnstile 或 reCAPTCHA
+- [ ] Phase 18 follow-up — 一字千金的額度算在瀏覽器 session 上，同一台 iPad 換學生會共用額度；班級用量大時把 YZ_DAILY_LIMIT 調高即可
 
 - [ ] Phase 17 follow-up — 請在 iPad Safari 上確認「送出」一次就成功；若還是要按兩次，把送出改成 `onPointerUp` 觸發並記錄 pointer 事件序列
 - [ ] Phase 17 follow-up — 「嗚」會被讀成「鳴」（烏／鳥一橫之差）：可針對候選字差異部件做第二次確認呼叫，但要在 8 秒內；先蒐集真實學生的誤判案例再決定

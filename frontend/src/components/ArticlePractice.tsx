@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import type { ArticleResponse, PracticeMode, WrongChar } from "../types";
-import { generateArticle, recognizeHandwriting } from "../api";
+import { generateArticle, recognizeHandwriting, QuotaError } from "../api";
 import HandwritingCanvas from "./HandwritingCanvas";
 import { usePersonalization } from "../personalization/PersonalizationContext";
 import { usePreferences } from "../personalization/PreferencesContext";
@@ -73,6 +73,7 @@ export default function ArticlePractice({
   const toggleZhuyin = () => setPrefs({ showZhuyin: !showZhuyin });
   const [results, setResults] = useState<AnswerResult[]>([]);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [dailyLimitMessage, setDailyLimitMessage] = useState<string | null>(null); // 今日免費辨識額度用完
   const [pendingResults, setPendingResults] = useState<AnswerResult[] | null>(null);
   const [pendingAward, setPendingAward] = useState<StampAward | null>(null);
 
@@ -156,7 +157,17 @@ export default function ArticlePractice({
             result,
           ]);
         })
-        .catch(() => {
+        .catch((err) => {
+          if (err instanceof QuotaError) {
+            // 額度用完：不給分也不扣分，把等待中的標記拿掉，畫面顯示訊息
+            setDailyLimitMessage(err.message);
+            setAnnotations((prev) => {
+              const next = new Map(prev);
+              next.delete(charIndex);
+              return next;
+            });
+            return;
+          }
           // Fallback: treat as correct
           const annotation: CharAnnotation = {
             charIndex,
@@ -220,7 +231,8 @@ export default function ArticlePractice({
             setResults((prev) => [...prev, result]);
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          if (err instanceof QuotaError) setDailyLimitMessage(err.message);
           // Recognition failed — remove pending, no penalty
           setAnnotations((prev) => {
             const next = new Map(prev);
@@ -499,6 +511,11 @@ export default function ArticlePractice({
           ? "💡 點擊句子中你認為是錯字的字，手寫出正確的字！"
           : "💡 點擊文章中你認為是錯字的字，手寫出正確的字！"}
       </div>
+      {dailyLimitMessage && (
+        <div className="error daily-limit" role="alert">
+          🚫 {dailyLimitMessage}。今天無法再辨識手寫，明天會重新計算。
+        </div>
+      )}
 
       <div className={`article-display ${showZhuyin ? "with-zhuyin" : ""}`}>
         {renderArticle()}
