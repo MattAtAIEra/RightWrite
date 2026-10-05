@@ -736,7 +736,7 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 - 後端：`pytest` 49/49（新增 `tests/test_admin_quota.py` 8 項：登入流程與登出、錯 8 次鎖定、沒設密碼全擋、改錯字額度 2 次後 429、bot UA 403、同 IP session 上限、一字千金加入被擋與評分扣額度、統計端點與落檔重載）
 - 前端：`vitest` 80/80；`tsc -b`＋`vite build` 通過
 - 真實瀏覽器 E2E（本機 :8003，RW_DAILY_LIMIT=3）：公開頁沒有後台連結、舊網址轉向、沒登入 401、密碼錯誤訊息、登入後四個分頁都載入（生字庫 12 課、點字看錯字）、同一瀏覽器辨識 3 次 200 第 4 次 429 且訊息正確、儀錶板數字卡對得上、登出後 401、python-urllib 直接打 API 403
-- Build/部署：成功（Cloud Run `__REVISION__`，asia-east1，取代 00056-l4d）；線上驗證：__LIVE__
+- Build/部署：成功（Cloud Run `rightwrite-00059-2wf`，asia-east1，取代 00056-l4d）；線上驗證：revision 的 env 與三把 secret（GEMINI、ADMIN_PASSWORD、ADMIN_SESSION_SECRET）掛對；Chrome（一般 UA）在線上走完：一字千金首頁無後台連結、舊網址轉向 /admin、未登入四個 API 皆 401、密碼錯誤訊息、登入後四個分頁載入、同一瀏覽器辨識 60 次 200 第 61 次 429 且訊息正確、儀錶板今天改錯字 60／額度擋下 2、登出後 401、python-urllib 直打 403；`gs://rightwrite-data-teamfollowme/usage/2026-10-05.json` 已寫入（rw 60、quota_hits 2、1 個 session）
 
 ---
 
