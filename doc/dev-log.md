@@ -766,6 +766,32 @@ Full-frontend visual redesign. No backend, API, storage, or logic changes. Class
 
 ---
 
+## Phase 20：首頁入口改成上下兩張插畫橫幅
+
+**日期**：2026-10-14
+**觸發**：用戶提供一張插畫（`doc/Adventure Learning Banners_ Find and Write.png`，上半改錯字神器、下半一字千金），要取代首頁原本左右並排、用幾何圖形裝飾的兩張卡片，入口改成上下排列
+
+### 完成項目
+
+1. **裁圖 script**（`scripts/build_portal_banners.py`）：自動找出原圖中間整列都是白色的分隔帶，上半存成改錯字神器、下半存成一字千金，兩張裁成一樣高（1672×459），各輸出 1672 與 836 寬的 WebP（約 100 KB／40 KB）給 `srcset`。換新原圖後重跑即可
+2. **首頁**（`frontend/src/portal/`）：標題、說明、標籤、進入按鈕都已畫在圖裡，所以整張橫幅就是一個 `<a>`，`alt` 寫應用名稱與「單人練習／多人競賽」。hover 時橫幅浮起、外圍出現跟圖中進入按鈕同色的光暈，並有一道光從左掃到右；`prefers-reduced-motion` 時關掉。舊卡片的 CSS 與兩個 SVG 圖示移除
+3. **窄螢幕**：640px 以下圖裡的說明字只剩約 6px 看不清楚，改在圖下方用文字顯示說明；寬螢幕這段文字只給螢幕閱讀器
+4. `CLAUDE.md` 補上重新產生橫幅的指令與設計說明
+
+### 發現與修正
+
+- **線上的 .webp 被當成 `text/plain` 送出**：Cloud Run 的 `python:3.12-slim` 容器沒有 `/etc/mime.types`，Python 3.12 內建對照表不認得 `.webp`，StaticFiles 退回 `text/plain`。一字千金的書法字型 `.woff2` 也有同樣問題，只是 Chrome 會自己判斷格式所以一直沒被發現。本機 macOS 有系統的 mime.types 所以看不出來。`main.py` 啟動時註冊這兩個副檔名，`tests/test_static_mime.py` 用只有內建對照表的 `MimeTypes` 模擬容器
+- **push 到 main 就會自動部署**：GitHub 上的 Cloud Build trigger（`rmgpgab-rightwrite-asia-east1-...`）在 push 到 `main` 時用 Dockerfile 建 image 並 `gcloud run services update --image`，只換 image、保留環境變數與 bucket 掛載。手動 `gcloud builds submit` 只在改了 `cloudbuild.yaml` 的部署設定時才需要，否則會多出重複的 revision（這次 00066～00070 都是同兩個 commit）
+
+### 測試結果
+
+- 後端：`pytest` 53/53（新增 `.webp`／`.woff2` Content-Type 一項）
+- 前端：`tsc -b`＋`vite build` 通過；`src/portal` lint 無錯誤（其他既有檔案的 6 個 lint 錯誤與這次無關）
+- 本機 E2E（vite :5180、production build 用 backend :8001）：1280／768／390 寬截圖正常；hover 光暈與光澤正常；點上方橫幅進 `/rightwrite`、點下方進 `/yzqj`
+- 部署：Cloud Run `rightwrite-00070-s5z`（100% 流量，取代 00065-b9r）；線上驗證：四個 WebP 回 `image/webp`、書法字型回 `font/woff2`；1280 寬載入 1672 版、390 寬（DPR 2）載入 836 版；兩張橫幅點擊分別進到改錯字神器與一字千金
+
+---
+
 
 ## TODO
 
