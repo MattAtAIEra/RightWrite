@@ -82,127 +82,82 @@ body[data-app="portal"] #root {
   margin-top: 6px;
 }
 
-.portal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  padding: 28px 8px 8px;
-}
-
-.portal-card {
-  position: relative;
+/* ===== 入口橫幅：上下排列，插畫本身就是按鈕 ===== */
+.portal-banners {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 28px 26px 30px;
-  background: var(--card-bg);
-  border-radius: 28px;
-  box-shadow: var(--shadow);
-  text-decoration: none;
-  color: var(--text);
-  border: 3px solid transparent;
-  overflow: hidden;
-  animation: popIn 0.6s ease-out both;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  gap: 22px;
+  padding: 26px 0 8px;
 }
 
-.portal-card::before {
+.portal-banner {
+  --glow: rgba(74, 52, 28, 0.18);
+  position: relative;
+  display: block;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 22px;
+  border: 3px solid #fffdf8;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  animation: riseIn 0.7s var(--ease) both;
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+/* 光暈顏色跟圖裡「進入」按鈕一致 */
+.portal-banner.tone-coral { --glow: rgba(226, 84, 58, 0.32); }
+.portal-banner.tone-teal { --glow: rgba(31, 150, 150, 0.32); }
+
+.portal-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: transform 0.6s var(--ease);
+}
+
+/* 滑過時一道斜向的光從左掃到右 */
+.portal-banner::after {
   content: "";
   position: absolute;
-  inset: auto -40px -60px auto;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  opacity: 0.18;
-  transition: transform 0.4s ease;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-110%);
 }
 
-.portal-card.tone-coral::before { background: var(--primary); }
-.portal-card.tone-teal::before { background: var(--secondary); }
-
-.portal-card:hover {
-  transform: translateY(-6px) rotate(-0.6deg);
-  box-shadow: var(--shadow-hover);
+.portal-banner:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 36px var(--glow), var(--shadow);
 }
 
-.portal-card.tone-coral:hover { border-color: var(--primary-light); }
-.portal-card.tone-teal:hover { border-color: var(--secondary); }
-
-.portal-card:hover::before {
-  transform: scale(1.35);
+.portal-banner:hover img {
+  transform: scale(1.015);
 }
 
-.portal-card-icon {
-  width: 84px;
-  height: 84px;
-  display: grid;
-  place-items: center;
-  border-radius: 24px;
-  background: var(--bg);
-  transition: transform 0.3s ease;
+.portal-banner:hover::after {
+  transform: translateX(110%);
+  transition: transform 0.9s var(--ease-soft);
 }
 
-.portal-card:hover .portal-card-icon {
-  transform: rotate(-8deg) scale(1.08);
+.portal-banner:active {
+  transform: translateY(-1px) scale(0.995);
 }
 
-.portal-card-sub {
-  display: inline-block;
-  font-size: 0.85rem;
-  font-weight: 700;
-  padding: 3px 12px;
-  border-radius: 999px;
-  color: #fff;
-  margin-bottom: 8px;
+.portal-banner:focus-visible {
+  outline: 3px solid var(--indigo);
+  outline-offset: 4px;
 }
 
-.tone-coral .portal-card-sub { background: var(--primary); }
-.tone-teal .portal-card-sub { background: var(--secondary-dark); }
-
-.portal-card h2 {
-  font-family: "ZCOOL KuaiLe", "LXGW WenKai TC", sans-serif;
-  font-size: 2rem;
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
-}
-
-.portal-card p {
-  color: var(--text-light);
-  line-height: 1.7;
-}
-
-.portal-tags {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.portal-tags li {
-  font-size: 0.85rem;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1.5px dashed var(--border);
-  color: var(--text-light);
-}
-
-.portal-card-go {
-  align-self: flex-end;
-  font-weight: 700;
-  font-size: 1.1rem;
-  padding: 10px 22px;
-  border-radius: 999px;
-  color: #fff;
-  transition: transform 0.25s ease;
-}
-
-.tone-coral .portal-card-go { background: linear-gradient(135deg, var(--primary), var(--warning)); }
-.tone-teal .portal-card-go { background: linear-gradient(135deg, var(--secondary), #2bb3a8); }
-
-.portal-card:hover .portal-card-go {
-  transform: translateX(6px);
+/* 寬螢幕：圖裡的說明字夠大，文字只留給螢幕閱讀器 */
+.portal-banner-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .portal-foot {
@@ -213,8 +168,26 @@ body[data-app="portal"] #root {
   padding-top: 32px;
 }
 
-@media (max-width: 520px) {
-  .portal-grid { gap: 16px; padding-top: 18px; }
-  .portal-card { padding: 22px 20px 24px; }
-  .portal-card h2 { font-size: 1.7rem; }
+/* 窄螢幕：橫幅縮小後圖裡的說明字看不清楚，改在圖下方用文字顯示 */
+@media (max-width: 640px) {
+  .portal-banners { gap: 16px; padding-top: 18px; }
+  .portal-banner { border-radius: 16px; }
+  .portal-banner-caption {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    padding: 10px 14px 12px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-banner,
+  .portal-banner img { animation: none; transition: none; }
+  .portal-banner::after { display: none; }
 }

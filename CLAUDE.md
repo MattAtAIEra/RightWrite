@@ -24,6 +24,9 @@ python -m pytest tests -q   # 一字千金整場流程的冒煙測試
 # Calligraphy font subset (re-run after editing backend/idioms_data.py)
 pip install fonttools brotli && python scripts/build_calligraphy_font.py
 
+# Portal banners (re-run after replacing doc/Adventure Learning Banners_ Find and Write.png)
+python scripts/build_portal_banners.py   # → frontend/src/portal/banners/*.webp
+
 # Vocab scraper
 cd scripts && python scrape_vocab.py   # Playwright-based, scrapes edu.tw textword API
 
@@ -81,6 +84,8 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 **Idiom bank** (backend/idioms_data.py): built-in `IDIOMS` plus custom entries in a JSON file (`YZQJ_IDIOMS_PATH`); `all_idioms()` merges both. In production the JSON lives on a Cloud Storage volume mounted at `/data` (see cloudbuild.yaml).
 
 **Calligraphy font**: `frontend/public/fonts/ARPLUKaiTW-yzqj.woff2` is a subset of AR PL UKai TW containing only the idiom characters. Regenerate with `scripts/build_calligraphy_font.py` whenever `backend/idioms_data.py` changes.
+
+**Portal banners**: the `/` portal shows two stacked illustrated banners (改錯字神器 on top, 一字千金 below); title, description, tags and the 進入 button are painted into the images, so each whole banner is one link. `scripts/build_portal_banners.py` finds the white separator in the source PNG, splits it, and writes 1672w/836w WebP for `srcset`. Below 640px the in-image description is too small to read, so `.portal-banner-caption` shows it as text under the image (screen-reader-only on wider screens).
 
 **Environment variables**:
 - `GOOGLE_APPLICATION_CREDENTIALS` — path to GCP service account JSON (for Vision API)
