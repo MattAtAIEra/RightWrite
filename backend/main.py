@@ -5,6 +5,7 @@ Backend API server
 import json
 import logging
 import math
+import mimetypes
 import os
 import random
 import re
@@ -715,6 +716,15 @@ def check_answer(req: CheckAnswerRequest):
 # ---------------------------------------------------------------------------
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+def register_static_mime_types() -> None:
+    """python:3.12-slim 沒有 /etc/mime.types，Python 3.12 內建對照表不認得這兩種副檔名，
+    StaticFiles／FileResponse 會退回 text/plain（首頁橫幅 .webp、一字千金書法字型 .woff2）。"""
+    mimetypes.add_type("image/webp", ".webp")
+    mimetypes.add_type("font/woff2", ".woff2")
+
+
+register_static_mime_types()
 
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
