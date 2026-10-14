@@ -30,7 +30,7 @@ import auth
 import usage
 import yzqj_store as store
 import idioms_data
-from idioms_data import all_idioms, distractors_for, pick_questions
+from idioms_data import PLAYABLE_LEVELS, all_idioms, distractors_for, level_counts, pick_questions
 from recognition import RecognitionResult, recognize_character
 
 # ---------------------------------------------------------------------------
@@ -126,6 +126,7 @@ class Game:
         self.host_sockets: set[WebSocket] = set()
         self.questions: list[dict] = []
         self.used_idioms: set[str] = set()  # 這一場所有輪次出過的成語
+        self.level = "common"  # 出題難度，老師每一輪開始前可以換
         self.current = -1
         self.question_started_at: float | None = None
         self.deadline: float | None = None
@@ -175,11 +176,15 @@ class Game:
 
     # ----- 賽局流程 -------------------------------------------------------
 
-    def start(self) -> None:
+    def start(self, level: str | None = None) -> None:
         if self.status not in ("lobby", "finished"):
             raise ValueError("賽局正在進行中")
         if not self.players:
             raise ValueError("還沒有人加入")
+        if level is not None:
+            if level not in PLAYABLE_LEVELS:
+                raise ValueError("難度只能選「一般常用」或「進階」")
+            self.level = level
         self.round += 1
         for p in self.players.values():
             p.answers = []
@@ -198,7 +203,9 @@ class Game:
         這一場已經出過的絕對避開，並把這輪的題目記進出題紀錄。
         """
         recent = store.recent_idioms(RECENT_ROUNDS * QUESTIONS_PER_ROUND)
-        questions = pick_questions(QUESTIONS_PER_ROUND, exclude=recent, must_exclude=self.used_idioms)
+        questions = pick_questions(
+            QUESTIONS_PER_ROUND, exclude=recent, must_exclude=self.used_idioms, level=self.level
+        )
         self.used_idioms.update(q["idiom"] for q in questions)
         store.log_questions(
             self.code, self.round, [q["idiom"] for q in questions], self.started_at or time.time()
@@ -429,6 +436,7 @@ class Game:
             "code": self.code,
             "status": self.status,
             "round": self.round,
+            "level": self.level,
             "max_players": MAX_PLAYERS,
             "question_seconds": question_seconds(),
             "reveal_seconds": reveal_seconds(),
@@ -608,8 +616,10 @@ async def join_game(code: str, req: JoinRequest, request: Request, response: Res
 
 @router.get("/meta")
 def meta():
+    counts = level_counts()
     return {
-        "idiom_count": len(all_idioms()),
+        "idiom_count": sum(counts[lv] for lv in PLAYABLE_LEVELS),
+        "level_counts": {lv: counts[lv] for lv in PLAYABLE_LEVELS},
         "questions_per_round": QUESTIONS_PER_ROUND,
         "question_seconds": question_seconds(),
         "recognize_timeout": recognize_timeout(),
@@ -629,6 +639,11 @@ class IdiomCreate(BaseModel):
     idiom: str
     wrong: list[IdiomWrong]
     meaning: str = ""
+    level: str = "common"
+
+
+class IdiomLevel(BaseModel):
+    level: str
 
 
 def _idiom_view(item: dict) -> dict:
@@ -636,19 +651,35 @@ def _idiom_view(item: dict) -> dict:
         "idiom": item["idiom"],
         "wrong": [{"pos": pos, "char": char} for pos, char in item["wrong"]],
         "meaning": item["meaning"],
+        "level": item["level"],
         "source": item.get("source", "builtin"),
+        "meaning_source": item.get("meaning_source", "custom"),
     }
 
 
 @router.get("/idioms")
 def list_idioms(admin: str = Depends(auth.require_admin)):
     """成語題庫清單：內建在前、自訂在後。只有管理員看得到。"""
-    items = [_idiom_view(i) for i in all_idioms()]
+    raw = all_idioms()
+    items = [_idiom_view(i) for i in raw]
     return {
         "idioms": items,
         "builtin_count": sum(1 for i in items if i["source"] == "builtin"),
         "custom_count": sum(1 for i in items if i["source"] == "custom"),
+        "level_counts": level_counts(raw),
     }
+
+
+@router.put("/idioms/{idiom}/level")
+def update_idiom_level(idiom: str, req: IdiomLevel, admin: str = Depends(auth.require_admin)):
+    """調整成語難度（管理員）：一般常用、進階，或不出題。"""
+    try:
+        item = idioms_data.set_level(idiom, req.level)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="找不到這個成語")
+    return _idiom_view(item)
 
 
 @router.post("/idioms", status_code=201)
@@ -664,7 +695,7 @@ def create_idiom(req: IdiomCreate, admin: str = Depends(auth.require_admin)):
 @router.delete("/idioms/{idiom}", status_code=204)
 def delete_idiom(idiom: str, admin: str = Depends(auth.require_admin)):
     """刪除自訂成語；內建的不能刪。"""
-    if any(i["idiom"] == idiom for i in idioms_data.IDIOMS):
+    if idiom in idioms_data.BUILTIN_NAMES:
         raise HTTPException(status_code=400, detail="內建成語不能刪除")
     if not idioms_data.remove_custom(idiom):
         raise HTTPException(status_code=404, detail="找不到這個自訂成語")
@@ -800,7 +831,8 @@ async def _handle_host_message(game: Game, ws: WebSocket, msg: dict) -> None:
     kind = msg.get("type")
     try:
         if kind == "start":
-            game.start()
+            level = msg.get("level")
+            game.start(level=str(level) if level is not None else None)
         elif kind == "skip":
             game.skip()
         elif kind == "ping":

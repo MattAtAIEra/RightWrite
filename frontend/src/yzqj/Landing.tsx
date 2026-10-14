@@ -95,6 +95,13 @@ export default function Landing() {
 
       <footer className="yz-footer">
         <a href="/">← 回學習樂園</a>
+        <p className="yz-credit">
+          成語與解釋取自
+          <a href="https://dict.idioms.moe.edu.tw/" target="_blank" rel="noreferrer">教育部《成語典》</a>
+          ，依
+          <a href="https://creativecommons.org/licenses/by-nd/3.0/tw/" target="_blank" rel="noreferrer">創用CC 姓名標示-禁止改作 3.0 臺灣</a>
+          授權使用。
+        </p>
       </footer>
     </div>
   );

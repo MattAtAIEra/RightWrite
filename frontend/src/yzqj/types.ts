@@ -55,11 +55,23 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
+/** 成語難度：一般常用、進階；hidden 是管理員設定的「不出題」 */
+export type IdiomLevel = "common" | "advanced" | "hidden";
+export type PlayableLevel = Exclude<IdiomLevel, "hidden">;
+
+export const LEVEL_LABELS: Record<IdiomLevel, string> = {
+  common: "一般常用",
+  advanced: "進階",
+  hidden: "不出題",
+};
+
 export interface Snapshot {
   type: "snapshot";
   code: string;
   status: GameStatus;
   round: number;
+  /** 這一輪（或下一輪預設）的出題難度 */
+  level: PlayableLevel;
   max_players: number;
   question_seconds: number;
   reveal_seconds: number;
@@ -173,17 +185,22 @@ export interface IdiomEntry {
   idiom: string;
   wrong: IdiomWrong[];
   meaning: string;
+  level: IdiomLevel;
   source: "builtin" | "custom";
+  /** 解釋從哪來：教育部《成語典》、本專案自己寫的、老師自訂 */
+  meaning_source: "moe" | "curated" | "custom";
 }
 
 export interface IdiomsResponse {
   idioms: IdiomEntry[];
   builtin_count: number;
   custom_count: number;
+  level_counts: Record<IdiomLevel, number>;
 }
 
 export interface YzqjMeta {
   idiom_count: number;
+  level_counts: Record<PlayableLevel, number>;
   questions_per_round: number;
   question_seconds: number;
   recognize_timeout: number;

@@ -22,7 +22,8 @@ body[data-app="portal"] #root {
 .portal-float span {
   position: absolute;
   bottom: -60px;
-  font-family: "AR PL UKai TW", "LXGW WenKai TC", serif;
+  /* 用頁面本來就載入的霞鶩文楷；一字千金的書法字型有一 MB 多，不為了幾個裝飾字下載 */
+  font-family: var(--font-body);
   font-size: 2.4rem;
   color: var(--secondary);
   opacity: 0;

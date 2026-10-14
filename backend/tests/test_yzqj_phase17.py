@@ -67,10 +67,12 @@ def test_pick_questions_avoids_recent_and_never_repeats_hard_exclusion():
     everything = {i["idiom"] for i in idioms_data.IDIOMS}
     assert len(idioms_data.pick_questions(5, exclude=everything)) == 5
 
-    # 硬排除（這一場出過的）就算題庫不夠也絕不重複
-    hard = {i["idiom"] for i in idioms_data.IDIOMS[:140]}
-    chosen = [q["idiom"] for q in idioms_data.pick_questions(5, exclude=everything, must_exclude=hard)]
-    assert set(chosen).isdisjoint(hard) and len(chosen) == 2
+    # 硬排除（這一場出過的）就算題庫不夠也絕不重複；一般常用只剩 2 個時，其餘用進階補
+    common = [i["idiom"] for i in idioms_data.all_idioms() if i["level"] == "common"]
+    hard = set(common[:-2])
+    chosen = idioms_data.pick_questions(5, exclude=everything, must_exclude=hard, level="common")
+    assert {q["idiom"] for q in chosen}.isdisjoint(hard) and len(chosen) == 5
+    assert [q["level"] for q in chosen].count("common") == 2
 
 
 def test_rounds_do_not_repeat_within_game_and_recent_games(client):
@@ -148,10 +150,12 @@ def test_distractors_include_question_wrong_char_and_similar_chars():
 
 def test_idiom_api_list_add_validate_delete(client):
     before = client.get("/api/yzqj/idioms", headers=HEADERS).json()
+    playable_before = client.get("/api/yzqj/meta").json()["idiom_count"]
     assert before["builtin_count"] == len(idioms_data.IDIOMS) and before["custom_count"] == 0
     
     builtin = {i["idiom"] for i in idioms_data.IDIOMS}
-    candidates = [("鵬程萬里", 3, "裡"), ("聞雞起舞", 3, "武"), ("水滴石穿", 3, "川"), ("守望相助", 3, "住")]
+    # 內建題庫收了教育部《成語典》全部主條成語，這裡用一定不是成語的四字詞
+    candidates = [("認真讀書", 3, "輸"), ("快樂學習", 3, "席"), ("天天運動", 2, "雲"), ("早睡早起", 3, "企")]
     fresh = [c for c in candidates if c[0] not in builtin]
     assert len(fresh) >= 2, "候選成語都在內建清單裡，請換幾個"
     (new_idiom, pos, wrong_char), (other, other_pos, other_wrong) = fresh[0], fresh[1]
@@ -164,11 +168,11 @@ def test_idiom_api_list_add_validate_delete(client):
 
     after = client.get("/api/yzqj/idioms", headers=HEADERS).json()
     assert after["custom_count"] == 1 and after["idioms"][-1]["idiom"] == new_idiom
-    assert client.get("/api/yzqj/meta").json()["idiom_count"] == len(idioms_data.IDIOMS) + 1
+    assert client.get("/api/yzqj/meta").json()["idiom_count"] == playable_before + 1
 
     # 存進 JSON 檔，而且會被出題抽到
     saved = json.loads(Path(os.environ["YZQJ_IDIOMS_PATH"]).read_text(encoding="utf-8"))
-    assert saved == [{"idiom": new_idiom, "wrong": [[pos, wrong_char]], "meaning": body["meaning"]}]
+    assert saved == [{"idiom": new_idiom, "wrong": [[pos, wrong_char]], "meaning": body["meaning"], "level": "common"}]
     assert new_idiom in {i["idiom"] for i in idioms_data.all_idioms()}
 
     # 驗證訊息

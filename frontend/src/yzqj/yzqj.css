@@ -1,15 +1,10 @@
 /* =====================================================================
    一字千金 — 樣式
-   書法字型：文鼎 PL 中楷（AR PL UKai TW），只子集化成語用到的字。
+   書法字型：文鼎 PL 中楷（AR PL UKai TW），只子集化成語用到的字；
+   @font-face 由 scripts/build_calligraphy_font.py 產生在 calligraphy-font.css。
    ===================================================================== */
 
-@font-face {
-  font-family: "AR PL UKai TW";
-  src: url("/fonts/ARPLUKaiTW-yzqj.woff2") format("woff2");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+@import "./calligraphy-font.css";
 
 :root {
   --ink: #1f1f1f;
@@ -608,11 +603,20 @@ body[data-app="yzqj"] #root {
 
 .yz-footer {
   display: flex;
-  justify-content: center;
-  gap: 24px;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   margin-top: 40px;
   color: var(--text-light);
 }
+
+.yz-credit {
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.yz-credit a { color: inherit; }
 
 .yz-footer a { color: var(--text-light); }
 
@@ -813,6 +817,53 @@ body[data-app="yzqj"] #root {
 }
 
 .yz-final-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+
+/* ----- 出題難度（老師在開始前選） ----- */
+
+.yz-level-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 520px;
+  margin: 0 auto 18px;
+  text-align: left;
+}
+
+.yz-level-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--paper);
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease-soft), background 0.2s var(--ease-soft);
+}
+
+.yz-level-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.yz-level-option b { font-size: 1.15rem; }
+.yz-level-option small { color: var(--text-light); line-height: 1.5; }
+
+.yz-level-option:hover { border-color: var(--rule-strong); }
+.yz-level-option.common.active { border-color: var(--cinnabar); background: var(--cinnabar-bg); }
+.yz-level-option.advanced.active { border-color: var(--indigo); background: var(--indigo-bg); }
+.yz-level-option.common.active b { color: var(--cinnabar-deep); }
+.yz-level-option.advanced.active b { color: var(--indigo-deep); }
+
+.yz-level-option:has(input:focus-visible) {
+  outline: 3px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .yz-level-picker { grid-template-columns: 1fr; }
+}
 
 /* ----- 學生 ----- */
 
@@ -1212,6 +1263,38 @@ body[data-app="yzqj"] #root {
 .yz-idiom-variant small { color: var(--text-light); margin-left: 4px; }
 .yz-idiom-badge { font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--text-light); white-space: nowrap; }
 .yz-idiom-badge.custom { background: #ffe66d; color: #5c4a00; }
+.yz-idiom-badge.moe { background: var(--indigo-bg); color: var(--indigo-deep); }
+.yz-idiom-table tr.is-hidden td { opacity: 0.55; }
+
+.yz-idiom-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.yz-idiom-filter {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--paper);
+  color: var(--text-light);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.yz-idiom-filter.active { border-color: var(--secondary); color: var(--indigo-deep); background: var(--indigo-bg); font-weight: 700; }
+
+.yz-idiom-level-select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--paper);
+  cursor: pointer;
+}
+.yz-idiom-level-select.common { border-color: var(--cinnabar-line); color: var(--cinnabar-deep); }
+.yz-idiom-level-select.advanced { border-color: var(--indigo-line); color: var(--indigo-deep); }
+
+.yz-idiom-level { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.yz-idiom-level .yz-level-picker { margin: 0; max-width: none; }
+
 .yz-link-btn { background: none; border: none; color: #c92a2a; font-family: inherit; font-size: 0.95rem; cursor: pointer; padding: 4px 6px; touch-action: manipulation; }
 
 @media (max-width: 700px) {

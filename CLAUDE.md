@@ -21,7 +21,10 @@ cd backend && pip install -r requirements.txt
 uvicorn main:app --reload   # Dev server on :8000
 python -m pytest tests -q   # 一字千金整場流程的冒煙測試
 
-# Calligraphy font subset (re-run after editing backend/idioms_data.py)
+# Idiom bank (MOE 成語典 xlsx + level/wrong-char annotations → backend/idiom_bank.json)
+pip install openpyxl && python scripts/build_idiom_bank.py [annotations.json ...]
+
+# Calligraphy font subset (re-run after rebuilding backend/idiom_bank.json)
 pip install fonttools brotli && python scripts/build_calligraphy_font.py
 
 # Portal banners (re-run after replacing doc/Adventure Learning Banners_ Find and Write.png)
@@ -81,9 +84,9 @@ docker build -t rightwrite .           # 2-stage: node:20-slim → python:3.12-s
 
 **Game state** (backend/yzqj.py): all live games are in-process memory (`GAMES` dict) with asyncio timers; results and a `question_log` are persisted to SQLite (`backend/yzqj_store.py`, path `YZQJ_DB_PATH`). Deploy as a single instance. Question picking avoids idioms from the last 6 rounds across games and never repeats within a game.
 
-**Idiom bank** (backend/idioms_data.py): built-in `IDIOMS` plus custom entries in a JSON file (`YZQJ_IDIOMS_PATH`); `all_idioms()` merges both. In production the JSON lives on a Cloud Storage volume mounted at `/data` (see cloudbuild.yaml).
+**Idiom bank** (backend/idioms_data.py): built-in `IDIOMS` loaded from `backend/idiom_bank.json` (1,680 idioms: the 4-char main entries of 教育部《成語典》 + 38 older hand-written ones) plus custom entries in a JSON file (`YZQJ_IDIOMS_PATH`); `all_idioms()` merges both and applies admin level overrides from `idiom_levels.json` in the same folder. Each idiom has `level`: `common` 一般常用 / `advanced` 進階 / `hidden` 不出題; the host picks common or advanced before each round (`{type:"start", level}`), and `pick_questions` only draws that level. In production both JSON files live on a Cloud Storage volume mounted at `/data` (see cloudbuild.yaml). 《成語典》 is CC BY-ND 3.0 TW: meanings are quoted verbatim (first sense only) and must not be rewritten; attribution is on the 一字千金 landing footer and the idiom admin page.
 
-**Calligraphy font**: `frontend/public/fonts/ARPLUKaiTW-yzqj.woff2` is a subset of AR PL UKai TW containing only the idiom characters. Regenerate with `scripts/build_calligraphy_font.py` whenever `backend/idioms_data.py` changes.
+**Calligraphy font**: subsets of AR PL UKai TW containing only idiom characters, split in two: `ARPLUKaiTW-yzqj.woff2` (common-level idioms + UI text, ~1.1MB, preloaded only on 一字千金 pages) and `ARPLUKaiTW-yzqj-ext.woff2` (the rest, ~420KB). The generated `frontend/src/yzqj/calligraphy-font.css` declares both with `unicode-range`, so the browser fetches the ext file only when such a character appears. Don't use this font family outside 一字千金 (the portal would download 1MB+ for decoration). Regenerate with `scripts/build_calligraphy_font.py` whenever `backend/idiom_bank.json` changes.
 
 **Portal banners**: the `/` portal shows two stacked illustrated banners (改錯字神器 on top, 一字千金 below); title, description, tags and the 進入 button are painted into the images, so each whole banner is one link. `scripts/build_portal_banners.py` finds the white separator in the source PNG, splits it, and writes 1672w/836w WebP for `srcset`. Below 640px the in-image description is too small to read, so `.portal-banner-caption` shows it as text under the image (screen-reader-only on wider screens).
 

@@ -28,6 +28,17 @@ function pickApp(pathname: string): { name: string; element: React.ReactNode } {
 
 const { name, element } = pickApp(window.location.pathname);
 document.body.dataset.app = name;
+// 一字千金的書法字型只在一字千金預先下載（首頁與改錯字神器用不到，不讓它們多抓幾百 KB）
+if (name === "yzqj") {
+  const preload = Object.assign(document.createElement("link"), {
+    rel: "preload",
+    href: "/fonts/ARPLUKaiTW-yzqj.woff2",
+    as: "font",
+    type: "font/woff2",
+    crossOrigin: "anonymous",
+  });
+  document.head.appendChild(preload);
+}
 // Portal 與一字千金各自在元件內設定 document.title；改錯字神器沒有，所以在這裡補
 if (name === "rightwrite") document.title = "改錯字練習 · RightWrite";
 

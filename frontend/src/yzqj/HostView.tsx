@@ -1,13 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
-import { socketUrl } from "./api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchMeta, socketUrl } from "./api";
 import { hostTokenKey, navigate } from "./router";
 import { useGameSocket } from "./useGameSocket";
-import type { ServerMessage, Snapshot, Stroke } from "./types";
+import { LEVEL_LABELS } from "./types";
+import type { PlayableLevel, ServerMessage, Snapshot, Stroke } from "./types";
 import Calligraphy from "./components/Calligraphy";
 import Countdown from "./components/Countdown";
 import MiniGrid from "./components/MiniGrid";
 import QrCard from "./components/QrCard";
 import Leaderboard from "./components/Leaderboard";
+import LevelPicker from "./components/LevelPicker";
 import { formatSeconds } from "./format";
 
 interface Props {
@@ -22,6 +24,15 @@ export default function HostView({ code }: Props) {
   const [strokes, setStrokes] = useState<Record<string, Stroke[]>>({});
   const [deadlineAt, setDeadlineAt] = useState<number>(0);
   const [notice, setNotice] = useState<string | null>(null);
+  // 老師在畫面上選的難度；還沒選時沿用伺服器上這場最近一輪的難度
+  const [level, setLevel] = useState<PlayableLevel | null>(null);
+  const [levelCounts, setLevelCounts] = useState<Record<PlayableLevel, number> | null>(null);
+
+  useEffect(() => {
+    fetchMeta()
+      .then((m) => setLevelCounts(m.level_counts))
+      .catch(() => setLevelCounts(null));
+  }, []);
 
   const onMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -95,6 +106,8 @@ export default function HostView({ code }: Props) {
   }
 
   const emptySlots = Math.max(0, snap.max_players - snap.players.length);
+  const chosenLevel = level ?? snap.level;
+  const startRound = () => send({ type: "start", level: chosenLevel });
 
   return (
     <div className="yz-host">
@@ -105,7 +118,7 @@ export default function HostView({ code }: Props) {
         <div className="yz-host-status">
           <span className={`yz-dot${connected ? " on" : ""}`} />
           {connected ? "已連線" : "重新連線中…"} · 代碼 <b>{code}</b> · {snap.players.length}/{snap.max_players} 人
-          {snap.round > 0 && <> · 第 {snap.round} 輪</>}
+          {snap.round > 0 && <> · 第 {snap.round} 輪 · {LEVEL_LABELS[snap.level]}</>}
         </div>
       </header>
 
@@ -131,11 +144,12 @@ export default function HostView({ code }: Props) {
                 <li key={`empty-${i}`} className="yz-chip empty">等待加入…</li>
               ))}
             </ul>
+            <LevelPicker value={chosenLevel} onChange={setLevel} counts={levelCounts} />
             <button
               type="button"
               className="yz-btn primary big"
               disabled={snap.players.length === 0}
-              onClick={() => send({ type: "start" })}
+              onClick={startRound}
             >
               開始比賽 🚀
             </button>
@@ -228,8 +242,9 @@ export default function HostView({ code }: Props) {
         <section className="yz-final">
           <h2 className="yz-final-title">🎉 比賽結束！</h2>
           <Leaderboard entries={snap.leaderboard} />
+          <LevelPicker value={chosenLevel} onChange={setLevel} counts={levelCounts} />
           <div className="yz-final-actions">
-            <button type="button" className="yz-btn primary big" onClick={() => send({ type: "start" })}>
+            <button type="button" className="yz-btn primary big" onClick={startRound}>
               再來一輪 🔁
             </button>
             <button type="button" className="yz-btn ghost" onClick={() => navigate("/yzqj")}>

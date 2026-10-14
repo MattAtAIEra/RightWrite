@@ -4,8 +4,10 @@ import type {
   CreateGameResponse,
   GameInfo,
   IdiomEntry,
+  IdiomLevel,
   IdiomsResponse,
   JoinResponse,
+  PlayableLevel,
   YzqjMeta,
 } from "./types";
 
@@ -82,7 +84,12 @@ export async function fetchIdioms(): Promise<IdiomsResponse> {
   return res.json();
 }
 
-export async function addIdiom(body: { idiom: string; wrong: { pos: number; char: string }[]; meaning: string }): Promise<IdiomEntry> {
+export async function addIdiom(body: {
+  idiom: string;
+  wrong: { pos: number; char: string }[];
+  meaning: string;
+  level: PlayableLevel;
+}): Promise<IdiomEntry> {
   const res = await fetch(`${API_BASE}/api/yzqj/idioms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -90,6 +97,17 @@ export async function addIdiom(body: { idiom: string; wrong: { pos: number; char
   });
   if (res.status === 401) throw new Error("請先登入管理介面");
   if (!res.ok) throw new Error(await readError(res, "新增失敗"));
+  return res.json();
+}
+
+export async function setIdiomLevel(idiom: string, level: IdiomLevel): Promise<IdiomEntry> {
+  const res = await fetch(`${API_BASE}/api/yzqj/idioms/${encodeURIComponent(idiom)}/level`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level }),
+  });
+  if (res.status === 401) throw new Error("請先登入管理介面");
+  if (!res.ok) throw new Error(await readError(res, "調整難度失敗"));
   return res.json();
 }
 
